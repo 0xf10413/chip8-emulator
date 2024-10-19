@@ -3,15 +3,16 @@ const CHIP8_FIRST_BYTE_ADDRESS: usize = 512;
 const CHIP8_NUMBER_REGISTERS: usize = 16;
 pub const CHIP8_SCREEN_WIDTH: usize = 64;
 pub const CHIP8_SCREEN_HEIGHT: usize = 32;
+const CHIP8_CALL_STACK_MAX_DEPTH: usize = 16;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
 enum OpCode {
     OC_0NNN(u16),
-    // 00E0 => missing
-    // 00EE => missing
+    OC_00E0,
+    OC_00EE,
     OC_1NNN(usize),
-    // 2NNN => missing
+    OC_2NNN(usize),
     OC_3XNN(usize, u8),
     OC_4XNN(usize, u8),
     OC_5XY0(usize, usize),
@@ -28,13 +29,35 @@ enum OpCode {
     OC_8XYE(usize, usize),
     OC_9XY0(usize, usize),
     OC_ANNN(usize),
+    // BNNN
+    // CXNN
     OC_DXYN(usize, usize, usize),
+    // EX9E
+    // EXA1
+    // FX07
+    // FX0A
+    // FX15
+    // FX18
+    // FX1E
+    // FX29
+    // FX33
     OC_FX55(usize),
+    // FX65
 }
 
 fn parse_opcode(raw_opcode: u16) -> Option<OpCode> {
+    // 00E0
+    if raw_opcode == 0x00E0 {
+        return Some(OpCode::OC_00E0);
+    }
+
+    // 00EE
+    if raw_opcode == 0x00EE {
+        return Some(OpCode::OC_00EE);
+    }
+
     // 0NNN
-    if raw_opcode & 0x0FFF == 0x0000 {
+    if raw_opcode & 0xF000 == 0x0000 {
         let nnn: u16 = raw_opcode & 0x0FFF;
         return Some(OpCode::OC_0NNN(nnn));
     }
@@ -43,6 +66,12 @@ fn parse_opcode(raw_opcode: u16) -> Option<OpCode> {
     if raw_opcode & 0xF000 == 0x1000 {
         let nnn: usize = (0x0FFF & raw_opcode) as usize;
         return Some(OpCode::OC_1NNN(nnn));
+    }
+
+    // 2NNN
+    if raw_opcode & 0xF000 == 0x2000 {
+        let nnn: usize = (0x0FFF & raw_opcode) as usize;
+        return Some(OpCode::OC_2NNN(nnn));
     }
 
     // 3XNN
@@ -185,6 +214,8 @@ pub struct EmulatorCpuMemory {
     generic_registers: [u8; CHIP8_NUMBER_REGISTERS], // V0..VF
     memory_register: usize,                          // I
     pub screen: [PixelStatus; (CHIP8_SCREEN_WIDTH * CHIP8_SCREEN_HEIGHT) as usize],
+    call_stack: [usize; CHIP8_CALL_STACK_MAX_DEPTH],
+    call_stack_depth: usize,
 }
 
 const SCREEN_ARRAY_REPEAT_VALUE: PixelStatus = PixelStatus::Black;
@@ -197,6 +228,8 @@ impl EmulatorCpuMemory {
             memory_register: 0,
             screen: [SCREEN_ARRAY_REPEAT_VALUE;
                 (CHIP8_SCREEN_WIDTH * CHIP8_SCREEN_HEIGHT) as usize],
+            call_stack: [0; CHIP8_CALL_STACK_MAX_DEPTH],
+            call_stack_depth: 0,
         }
     }
 
@@ -234,6 +267,20 @@ impl EmulatorCpuMemory {
 
     fn process_opcode(&mut self, opcode: &OpCode) {
         match opcode {
+            OpCode::OC_00E0 => {
+                // Clears screen
+                println!("Clearing screen");
+                self.screen = [SCREEN_ARRAY_REPEAT_VALUE;
+                (CHIP8_SCREEN_WIDTH * CHIP8_SCREEN_HEIGHT) as usize];
+            }
+
+            OpCode::OC_00EE => {
+                // Jumps back in the call stack
+                println!("Jumping back in call stack");
+                self.call_stack_depth -= 1;
+                self.program_counter = self.call_stack[self.call_stack_depth];
+            }
+
             OpCode::OC_0NNN(_) => {
                 // Calls code routine at address NNN
                 panic!("OpCode 0NNN not implemented!")
@@ -242,6 +289,15 @@ impl EmulatorCpuMemory {
             OpCode::OC_1NNN(nnn) => {
                 // Next instruction will be at address NNN
                 println!("Setting pc to {}", nnn);
+                self.program_counter = *nnn - 2; // TODO: increase pc in this function to avoid hack?
+            }
+
+            OpCode::OC_2NNN(nnn) => {
+                // Next instruction will be at address NNN.
+                // However, this time, we keep the previous pc value.
+                println!("Jumping to {} while increasing call stack", nnn);
+                self.call_stack[self.call_stack_depth] = self.program_counter;
+                self.call_stack_depth += 1;
                 self.program_counter = *nnn - 2; // TODO: increase pc in this function to avoid hack?
             }
 
@@ -426,11 +482,35 @@ mod tests {
 
     #[test]
     #[allow(non_snake_case)]
+    fn test_opcode_00E0() {
+        let mut emulator = EmulatorCpuMemory::new();
+        emulator.load_program(&[0x00, 0xE0]);
+        emulator.screen[0x10] = PixelStatus::White;
+        emulator.process_next_instruction();
+        assert_eq!(emulator.screen[0x10], PixelStatus::Black);
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
     fn test_opcode_1NNN() {
         let mut emulator = EmulatorCpuMemory::new();
         emulator.load_program(&[0x12, 0xFF]);
         emulator.process_next_instruction();
         assert_eq!(emulator.program_counter, 0x2FF);
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test_opcode_2NNN_00EE() {
+        let mut emulator = EmulatorCpuMemory::new();
+        emulator.load_program(&[0x22, 0x04, 0x00, 0x00, 0x00, 0xEE]);
+        emulator.process_next_instruction();
+        assert_eq!(emulator.program_counter, 0x204);
+        assert_eq!(emulator.call_stack[0], CHIP8_FIRST_BYTE_ADDRESS);
+        assert_eq!(emulator.call_stack_depth, 1);
+        emulator.process_next_instruction();
+        assert_eq!(emulator.program_counter, 0x202);
+        assert_eq!(emulator.call_stack_depth, 0);
     }
 
     #[test]
