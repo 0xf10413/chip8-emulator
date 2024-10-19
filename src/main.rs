@@ -1,115 +1,57 @@
-const CHIP8_MEMORY_SIZE: usize = 4096;
-const CHIP8_FIRST_BYTE_ADDRESS: usize = 512;
-const CHIP8_NUMBER_REGISTERS: usize = 16;
-//const CHIP8_CALL_STACK_SIZE: usize = 16;
+mod emulator;
+extern crate sdl2;
 
-#[allow(non_camel_case_types)]
-#[derive(Debug)]
-enum OpCode {
-    OC_0NNN(u16),
-    OC_6XNN(usize, u8),
-}
-
-fn parse_opcode(raw_opcode: u16) -> Option<OpCode> {
-    // 0NNN
-    if raw_opcode & 0x0FFF == 0x0000 {
-        let nnn: u16 = raw_opcode & 0x0FFF;
-        return Some(OpCode::OC_0NNN(nnn));
-    }
-
-    // 6XNN
-    if raw_opcode & 0xF000 == 0x6000 {
-        let x: usize = ((0x0F00 & raw_opcode) >> 8) as usize;
-        let nn: u8 = (0x00FF & raw_opcode) as u8;
-        return Some(OpCode::OC_6XNN(x, nn));
-    }
-
-    return None;
-}
-
-#[derive(Debug)]
-struct EmulatorCpuMemory {
-    memory: [u8; CHIP8_MEMORY_SIZE],
-    program_counter: usize,
-    generic_registers: [u8; CHIP8_NUMBER_REGISTERS],
-    //opcode_register: u8,
-    //call_stack: [usize; CHIP8_CALL_STACK_SIZE], // TODO: make an actual stack struct
-    //call_stack_index: usize, // TODO: make an actual stack struct
-}
-
-impl EmulatorCpuMemory {
-    fn new() -> Self {
-        Self {
-            memory: [0; CHIP8_MEMORY_SIZE],
-            program_counter: CHIP8_FIRST_BYTE_ADDRESS,
-            generic_registers: [0; CHIP8_NUMBER_REGISTERS],
-            //opcode_register: 0,
-            //call_stack: [0; CHIP8_CALL_STACK_SIZE],
-            //call_stack_index: 0,
-        }
-    }
-
-    fn process_next_instruction(&mut self) {
-        println!("Reading code and processing next instruction...");
-
-        // Read next, which is build from the next two bytes
-        let opcode_first_part: u16 = self.memory[self.program_counter] as u16;
-        let opcode_second_part: u16 = self.memory[self.program_counter + 1] as u16;
-        let opcode_raw: u16 = (opcode_first_part << 8) + opcode_second_part;
-        println!("Bytes read, to be parsed as opcode: {:#06X}", opcode_raw);
-
-        // Parse what we just read
-        let identified_opcode = parse_opcode(opcode_raw);
-
-        // Process the new opcode
-        match identified_opcode {
-            Some(ref opcode) => {
-                println!("Identified read opcode as {:?}", opcode);
-                self._process_opcode(opcode);
-            }
-            None => panic!("Unidentified opcode!"),
-        }
-
-        // Jump to next instruction
-        self.program_counter += 2;
-    }
-
-    fn _process_opcode(&mut self, opcode: &OpCode) {
-        match opcode {
-            OpCode::OC_0NNN(_) => {
-                // 0NNN: Calls code routine at address NNN
-                panic!("OpCode 0NNN not implemented!")
-            }
-
-            OpCode::OC_6XNN(x, nn) => {
-                // 6XNN: Defines register VX to NN
-                println!("Setting register V{:X} to {:#X}", x, nn);
-                self.generic_registers[*x] = *nn;
-            }
-        }
-    }
-}
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
+use sdl2::pixels::Color;
+use std::time::Duration;
 
 fn main() {
-    let mut state = EmulatorCpuMemory::new();
-    state.memory[CHIP8_FIRST_BYTE_ADDRESS] = 0x6A;
-    state.memory[CHIP8_FIRST_BYTE_ADDRESS + 1] = 0x10;
-    state.process_next_instruction();
-    //println!("{:#?}", state);
-}
+    let sdl_context = sdl2::init().unwrap();
+    let video_subsystem = sdl_context.video().unwrap();
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+    let window = video_subsystem
+        .window("rust-sdl2 demo", 800, 600)
+        .position_centered()
+        .build()
+        .unwrap();
 
-    #[test]
-    #[allow(non_snake_case)]
-    fn test_opcode_6XNN() {
-        let mut state = EmulatorCpuMemory::new();
-        state.memory[CHIP8_FIRST_BYTE_ADDRESS] = 0x6A;
-        state.memory[CHIP8_FIRST_BYTE_ADDRESS + 1] = 0x15;
-        state.process_next_instruction();
-        assert_eq!(state.generic_registers[0xA], 0x15);
-        assert_eq!(state.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 2)
+    let mut canvas = window.into_canvas().build().unwrap();
+
+    let mut event_pump = sdl_context.event_pump().unwrap();
+
+    let mut emulator = emulator::EmulatorCpuMemory::new();
+    emulator.load_program(&[
+        0x6A, 0x15,
+    ]);
+
+    'running: loop {
+        // Clear screen
+        canvas.set_draw_color(Color::RGB(0, 0, 0));
+        canvas.clear();
+
+        // Event loop
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit { .. }
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => break 'running,
+                Event::KeyDown {
+                    keycode: Some(Keycode::SPACE),
+                    ..
+                } => {
+                    emulator.process_next_instruction();
+                }
+                _ => {}
+            }
+        }
+
+        // Display new screen
+        canvas.present();
+
+        // Slow down a bit
+        ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
 }
