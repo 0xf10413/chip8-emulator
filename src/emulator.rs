@@ -38,7 +38,7 @@ enum OpCode {
     // FX0A
     // FX15
     // FX18
-    // FX1E
+    OC_FX1E(usize),
     // FX29
     // FX33
     OC_FX55(usize),
@@ -191,6 +191,12 @@ fn parse_opcode(raw_opcode: u16) -> Option<OpCode> {
         let y: usize = ((0x00F0 & raw_opcode) >> 4) as usize;
         let n: usize = ((0x000F & raw_opcode) >> 0) as usize;
         return Some(OpCode::OC_DXYN(x, y, n));
+    }
+
+    // FX1E
+    if raw_opcode & 0xF0FF == 0xF01E {
+        let x: usize = ((0x0F00 & raw_opcode) >> 8) as usize;
+        return Some(OpCode::OC_FX1E(x));
     }
 
     // FX55
@@ -444,6 +450,18 @@ impl EmulatorCpuMemory {
                             }
                         }
                     }
+                }
+            }
+
+            OpCode::OC_FX1E(x) => {
+                // Add VX to I, taking into account overflow. Writes overflow in VF.
+                println!("Adding V{:X} to I, writing overflow in VF in memory at I", x);
+                self.memory_register += self.generic_registers[*x] as usize;
+                if self.memory_register > 0xFFF {
+                    self.memory_register -= 0xFFF;
+                    self.generic_registers[0xF] = 1;
+                } else {
+                    self.generic_registers[0xF] = 0;
                 }
             }
 
@@ -845,6 +863,33 @@ mod tests {
         assert_eq!(emulator.screen[0x05 + 0x07*CHIP8_SCREEN_WIDTH + 5], PixelStatus::White);
         assert_eq!(emulator.screen[0x05 + 0x07*CHIP8_SCREEN_WIDTH + 6], PixelStatus::Black);
         assert_eq!(emulator.screen[0x05 + 0x07*CHIP8_SCREEN_WIDTH + 7], PixelStatus::Black);
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test_opcode_FX1E() {
+        let mut emulator = EmulatorCpuMemory::new();
+        emulator.load_program(&[0x60, 0xFF, 0x6F, 0x10, 0xAF, 0xFF, 0xF0, 0x1E, 0xF0, 0x1E]);
+
+        emulator.process_next_instruction();
+        emulator.process_next_instruction();
+        emulator.process_next_instruction();
+        assert_eq!(emulator.generic_registers[0x0], 0xFF);
+        assert_eq!(emulator.generic_registers[0xF], 0x10);
+        assert_eq!(emulator.memory_register, 0xFFF);
+        assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 6);
+
+        emulator.process_next_instruction();
+        assert_eq!(emulator.generic_registers[0x0], 0xFF);
+        assert_eq!(emulator.generic_registers[0xF], 0x01);
+        assert_eq!(emulator.memory_register, 0xFF);
+        assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 8);
+
+        emulator.process_next_instruction();
+        assert_eq!(emulator.generic_registers[0x0], 0xFF);
+        assert_eq!(emulator.generic_registers[0xF], 0x00);
+        assert_eq!(emulator.memory_register, 0x1FE);
+        assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 10);
     }
 
     #[test]
