@@ -21,9 +21,7 @@ fn main() {
     let mut event_pump = sdl_context.event_pump().unwrap();
 
     let mut emulator = emulator::EmulatorCpuMemory::new();
-    emulator.load_program(&[
-        0x6A, 0x15,
-    ]);
+    emulator.load_program(&[0x6A, 0x15]);
 
     'running: loop {
         // Clear screen

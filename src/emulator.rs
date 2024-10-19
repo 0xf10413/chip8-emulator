@@ -25,6 +25,7 @@ enum OpCode {
     OC_8XY6(usize, usize),
     OC_8XY7(usize, usize),
     OC_8XYE(usize, usize),
+    OC_9XY0(usize, usize),
 }
 
 fn parse_opcode(raw_opcode: u16) -> Option<OpCode> {
@@ -138,17 +139,24 @@ fn parse_opcode(raw_opcode: u16) -> Option<OpCode> {
         return Some(OpCode::OC_8XYE(x, y));
     }
 
+    // 9XY0
+    if raw_opcode & 0xF00F == 0x9000 {
+        let x: usize = ((0x0F00 & raw_opcode) >> 8) as usize;
+        let y: usize = ((0x00F0 & raw_opcode) >> 4) as usize;
+        return Some(OpCode::OC_9XY0(x, y));
+    }
+
     return None;
 }
 
 #[derive(Debug)]
 pub struct EmulatorCpuMemory {
     memory: [u8; CHIP8_MEMORY_SIZE],
-    program_counter: usize,
-    generic_registers: [u8; CHIP8_NUMBER_REGISTERS],
-    //opcode_register: u8,
-    //call_stack: [usize; CHIP8_CALL_STACK_SIZE], // TODO: make an actual stack struct
-    //call_stack_index: usize, // TODO: make an actual stack struct
+    program_counter: usize,                          // pc
+    generic_registers: [u8; CHIP8_NUMBER_REGISTERS], // V0..VF
+    memory_register: u16,                            // I
+                                                     //call_stack: [usize; CHIP8_CALL_STACK_SIZE], // TODO: make an actual stack struct
+                                                     //call_stack_index: usize, // TODO: make an actual stack struct
 }
 
 impl EmulatorCpuMemory {
@@ -157,7 +165,7 @@ impl EmulatorCpuMemory {
             memory: [0; CHIP8_MEMORY_SIZE],
             program_counter: CHIP8_FIRST_BYTE_ADDRESS,
             generic_registers: [0; CHIP8_NUMBER_REGISTERS],
-            //opcode_register: 0,
+            memory_register: 0,
             //call_stack: [0; CHIP8_CALL_STACK_SIZE],
             //call_stack_index: 0,
         }
@@ -165,7 +173,7 @@ impl EmulatorCpuMemory {
 
     pub fn load_program(&mut self, program: &[u8]) {
         for (i, byte) in program.iter().enumerate() {
-            self.memory[CHIP8_FIRST_BYTE_ADDRESS+i] = *byte
+            self.memory[CHIP8_FIRST_BYTE_ADDRESS + i] = *byte
         }
         self.program_counter = CHIP8_FIRST_BYTE_ADDRESS;
     }
@@ -229,7 +237,8 @@ impl EmulatorCpuMemory {
                 println!("Skipping next instruction if V{:X} == V{:X}", x, y);
                 if self.generic_registers[*x] == self.generic_registers[*y] {
                     self.program_counter += 2;
-                }            }
+                }
+            }
 
             OpCode::OC_6XNN(x, nn) => {
                 // Defines register VX to NN
@@ -269,8 +278,12 @@ impl EmulatorCpuMemory {
 
             OpCode::OC_8XY4(x, y) => {
                 // Set register VX to the value of VX + VY, write carry in VF
-                println!("Adding register V{:X} with the value of V{:X}, while putting carry in VF", x, y);
-                let (result, overflow ) = self.generic_registers[*x].overflowing_add(self.generic_registers[*y]);
+                println!(
+                    "Adding register V{:X} with the value of V{:X}, while putting carry in VF",
+                    x, y
+                );
+                let (result, overflow) =
+                    self.generic_registers[*x].overflowing_add(self.generic_registers[*y]);
                 self.generic_registers[*x] = result;
                 self.generic_registers[0xF] = if overflow { 1 } else { 0 };
             }
@@ -278,7 +291,8 @@ impl EmulatorCpuMemory {
             OpCode::OC_8XY5(x, y) => {
                 // Set register VX to the value of VX - VY, write carry in VF
                 println!("Substracting register V{:X} with the value of V{:X}, while putting carry in VF", x, y);
-                let (result, overflow ) = self.generic_registers[*x].overflowing_sub(self.generic_registers[*y]);
+                let (result, overflow) =
+                    self.generic_registers[*x].overflowing_sub(self.generic_registers[*y]);
                 self.generic_registers[*x] = result;
                 self.generic_registers[0xF] = if overflow { 1 } else { 0 };
             }
@@ -286,7 +300,10 @@ impl EmulatorCpuMemory {
             OpCode::OC_8XY6(x, ..) => {
                 // Shifts VX to the right by 1 bit. VF will contain the lost bit.
                 // Somehow, Y is not used?
-                println!("Shifting right register V{:X} with the lost bit written in VF", x);
+                println!(
+                    "Shifting right register V{:X} with the lost bit written in VF",
+                    x
+                );
                 self.generic_registers[0xF] = self.generic_registers[*x] & 0x01;
                 self.generic_registers[*x] >>= 1;
             }
@@ -294,7 +311,8 @@ impl EmulatorCpuMemory {
             OpCode::OC_8XY7(x, y) => {
                 // Sets VX to VY - VX. VF is set to 0 if there is an overflow, 1 otherwise.
                 println!("Setting register V{:X} to V{:X} - V{:X} with opposite of overflow written in VF", x, y, x);
-                let (result, overflow ) = self.generic_registers[*y].overflowing_sub(self.generic_registers[*x]);
+                let (result, overflow) =
+                    self.generic_registers[*y].overflowing_sub(self.generic_registers[*x]);
                 self.generic_registers[*x] = result;
                 self.generic_registers[0xF] = if overflow { 0 } else { 1 };
             }
@@ -302,14 +320,24 @@ impl EmulatorCpuMemory {
             OpCode::OC_8XYE(x, ..) => {
                 // Shifts VX to the left by 1 bit. VF will contain the lost bit.
                 // Somehow, Y is not used?
-                println!("Shifting left register V{:X} with the lost bit written in VF", x);
+                println!(
+                    "Shifting left register V{:X} with the lost bit written in VF",
+                    x
+                );
                 self.generic_registers[0xF] = (self.generic_registers[*x] & 0b10000000) >> 7;
                 self.generic_registers[*x] <<= 1;
+            }
+
+            OpCode::OC_9XY0(x, y) => {
+                // Skips next instruction if VX == VY
+                println!("Skipping next instruction if V{:X} != V{:X}", x, y);
+                if self.generic_registers[*x] != self.generic_registers[*y] {
+                    self.program_counter += 2;
+                }
             }
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -375,7 +403,9 @@ mod tests {
     #[allow(non_snake_case)]
     fn test_opcode_5XY0() {
         let mut emulator = EmulatorCpuMemory::new();
-        emulator.load_program(&[0x6A, 0x01, 0x6B, 0x01, 0x5A, 0xB0, 0x6A, 0x10, 0x6A, 0x02, 0x5A, 0xB0]);
+        emulator.load_program(&[
+            0x6A, 0x01, 0x6B, 0x01, 0x5A, 0xB0, 0x6A, 0x10, 0x6A, 0x02, 0x5A, 0xB0,
+        ]);
         emulator.process_next_instruction();
         emulator.process_next_instruction();
         assert_eq!(emulator.generic_registers[0xA], 0x01);
@@ -415,7 +445,6 @@ mod tests {
         assert_eq!(emulator.generic_registers[0xB], 0x08);
         assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 4);
     }
-
 
     #[test]
     #[allow(non_snake_case)]
@@ -553,7 +582,9 @@ mod tests {
     #[allow(non_snake_case)]
     fn test_opcode_8XY7() {
         let mut emulator = EmulatorCpuMemory::new();
-        emulator.load_program(&[0x6A, 0x04, 0x6B, 0x03, 0x6F, 0x10, 0x8A, 0xB7, 0x6A, 0x01, 0x8A, 0xB7]);
+        emulator.load_program(&[
+            0x6A, 0x04, 0x6B, 0x03, 0x6F, 0x10, 0x8A, 0xB7, 0x6A, 0x01, 0x8A, 0xB7,
+        ]);
         emulator.process_next_instruction();
         emulator.process_next_instruction();
         emulator.process_next_instruction();
@@ -596,5 +627,31 @@ mod tests {
         assert_eq!(emulator.generic_registers[0xA], 0b10000000);
         assert_eq!(emulator.generic_registers[0xF], 0x00);
         assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 8);
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test_opcode_9XY0() {
+        let mut emulator = EmulatorCpuMemory::new();
+        emulator.load_program(&[
+            0x6A, 0x02, 0x6B, 0x01, 0x9A, 0xB0, 0x6A, 0x10, 0x6A, 0x01, 0x9A, 0xB0,
+        ]);
+        emulator.process_next_instruction();
+        emulator.process_next_instruction();
+        assert_eq!(emulator.generic_registers[0xA], 0x02);
+        assert_eq!(emulator.generic_registers[0xB], 0x01);
+        assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 4);
+        emulator.process_next_instruction();
+        assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 8);
+        assert_eq!(emulator.generic_registers[0xA], 0x02);
+        assert_eq!(emulator.generic_registers[0xB], 0x01);
+        emulator.process_next_instruction();
+        assert_eq!(emulator.generic_registers[0xA], 0x01);
+        assert_eq!(emulator.generic_registers[0xB], 0x01);
+        assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 10);
+        emulator.process_next_instruction();
+        assert_eq!(emulator.generic_registers[0xA], 0x01);
+        assert_eq!(emulator.generic_registers[0xB], 0x01);
+        assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 12);
     }
 }
