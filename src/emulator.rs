@@ -1,7 +1,8 @@
 const CHIP8_MEMORY_SIZE: usize = 4096;
 const CHIP8_FIRST_BYTE_ADDRESS: usize = 512;
 const CHIP8_NUMBER_REGISTERS: usize = 16;
-//const CHIP8_CALL_STACK_SIZE: usize = 16;
+pub const CHIP8_SCREEN_WIDTH: usize = 64;
+pub const CHIP8_SCREEN_HEIGHT: usize = 32;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
@@ -27,6 +28,8 @@ enum OpCode {
     OC_8XYE(usize, usize),
     OC_9XY0(usize, usize),
     OC_ANNN(usize),
+    OC_DXYN(usize, usize, usize),
+    OC_FX55(usize),
 }
 
 fn parse_opcode(raw_opcode: u16) -> Option<OpCode> {
@@ -153,19 +156,38 @@ fn parse_opcode(raw_opcode: u16) -> Option<OpCode> {
         return Some(OpCode::OC_ANNN(nnn));
     }
 
+    // DXYN
+    if raw_opcode & 0xF000 == 0xD000 {
+        let x: usize = ((0x0F00 & raw_opcode) >> 8) as usize;
+        let y: usize = ((0x00F0 & raw_opcode) >> 4) as usize;
+        let n: usize = ((0x000F & raw_opcode) >> 0) as usize;
+        return Some(OpCode::OC_DXYN(x, y, n));
+    }
+
+    // FX55
+    if raw_opcode & 0xF0FF == 0xF055 {
+        let x: usize = ((0x0F00 & raw_opcode) >> 8) as usize;
+        return Some(OpCode::OC_FX55(x));
+    }
+
     return None;
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
+enum PixelStatus {
+    Black,
+    White,
+}
+
 pub struct EmulatorCpuMemory {
     memory: [u8; CHIP8_MEMORY_SIZE],
     program_counter: usize,                          // pc
     generic_registers: [u8; CHIP8_NUMBER_REGISTERS], // V0..VF
     memory_register: usize,                          // I
-                                                     //call_stack: [usize; CHIP8_CALL_STACK_SIZE], // TODO: make an actual stack struct
-                                                     //call_stack_index: usize, // TODO: make an actual stack struct
+    screen: [PixelStatus; (CHIP8_SCREEN_WIDTH * CHIP8_SCREEN_HEIGHT) as usize],
 }
 
+const SCREEN_ARRAY_REPEAT_VALUE: PixelStatus = PixelStatus::Black;
 impl EmulatorCpuMemory {
     pub fn new() -> Self {
         Self {
@@ -173,8 +195,8 @@ impl EmulatorCpuMemory {
             program_counter: CHIP8_FIRST_BYTE_ADDRESS,
             generic_registers: [0; CHIP8_NUMBER_REGISTERS],
             memory_register: 0,
-            //call_stack: [0; CHIP8_CALL_STACK_SIZE],
-            //call_stack_index: 0,
+            screen: [SCREEN_ARRAY_REPEAT_VALUE;
+                (CHIP8_SCREEN_WIDTH * CHIP8_SCREEN_HEIGHT) as usize],
         }
     }
 
@@ -347,6 +369,35 @@ impl EmulatorCpuMemory {
                 // Set register I to NNN
                 println!("Setting I to {}", nnn);
                 self.memory_register = *nnn;
+            }
+
+            OpCode::OC_DXYN(x, y, n) => {
+                // Draw sprite with height n at coordinates (VX, VY)
+                println!("Drawing sprite with height {} at (V{:x} = {}, V{:x} = {})", n, x, self.generic_registers[*x], y, self.generic_registers[*y]);
+                let pos_x = self.generic_registers[*x] as usize;
+                let pos_y = self.generic_registers[*y] as usize;
+                for (offset_y, byte) in self.memory[self.memory_register ..= self.memory_register+n].iter().enumerate() {
+                    for bit_index in (0..8).rev() {
+                        let offset_x = 7 - bit_index;
+                        let switch_pixel = (byte & (1 << bit_index)) >> bit_index == 1;
+                        if switch_pixel {
+                            let pixel_coordinate: usize = (pos_y + offset_y)*(CHIP8_SCREEN_WIDTH as usize) + pos_x + offset_x;
+                            match self.screen[pixel_coordinate] {
+                                PixelStatus::Black => self.screen[pixel_coordinate] = PixelStatus::White,
+                                PixelStatus::White => self.screen[pixel_coordinate] = PixelStatus::Black,
+                            }
+                        }
+                    }
+                }
+            }
+
+            OpCode::OC_FX55(x) => {
+                // Load bytes in V0, ..., VX in memory at I
+                println!("Loading V0, ..., V{:X} in memory at I", x);
+                for i in 0..=*x {
+                    println!("Loading V{:x} {:b} at {:x}", i, self.generic_registers[i], self.memory_register+i);
+                    self.memory[self.memory_register+i] = self.generic_registers[i];
+                }
             }
         }
     }
@@ -676,5 +727,63 @@ mod tests {
         emulator.process_next_instruction();
         assert_eq!(emulator.memory_register, 0x0FEB);
         assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 2);
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test_opcode_DXYN() {
+        let mut emulator: EmulatorCpuMemory = EmulatorCpuMemory::new();
+        emulator.load_program(&[0xD0, 0x11]);
+
+        // Cheating a bit for a faster setup
+        emulator.generic_registers[0] = 0x05;
+        emulator.generic_registers[1] = 0x06;
+        emulator.memory_register = 0x300;
+        emulator.memory[0x300] = 0b10101010;
+        emulator.memory[0x301] = 0b11001100;
+
+        emulator.process_next_instruction();
+
+        for j in 0..CHIP8_SCREEN_HEIGHT {
+            println!("{:?}", &emulator.screen[j*CHIP8_SCREEN_WIDTH .. (j+1)*CHIP8_SCREEN_WIDTH]);
+        }
+
+        assert_eq!(emulator.screen[0x05 + 0x06*CHIP8_SCREEN_WIDTH + 0], PixelStatus::White);
+        assert_eq!(emulator.screen[0x05 + 0x06*CHIP8_SCREEN_WIDTH + 1], PixelStatus::Black);
+        assert_eq!(emulator.screen[0x05 + 0x06*CHIP8_SCREEN_WIDTH + 2], PixelStatus::White);
+        assert_eq!(emulator.screen[0x05 + 0x06*CHIP8_SCREEN_WIDTH + 3], PixelStatus::Black);
+        assert_eq!(emulator.screen[0x05 + 0x06*CHIP8_SCREEN_WIDTH + 4], PixelStatus::White);
+        assert_eq!(emulator.screen[0x05 + 0x06*CHIP8_SCREEN_WIDTH + 5], PixelStatus::Black);
+        assert_eq!(emulator.screen[0x05 + 0x06*CHIP8_SCREEN_WIDTH + 6], PixelStatus::White);
+        assert_eq!(emulator.screen[0x05 + 0x06*CHIP8_SCREEN_WIDTH + 7], PixelStatus::Black);
+
+        assert_eq!(emulator.screen[0x05 + 0x07*CHIP8_SCREEN_WIDTH + 0], PixelStatus::White);
+        assert_eq!(emulator.screen[0x05 + 0x07*CHIP8_SCREEN_WIDTH + 1], PixelStatus::White);
+        assert_eq!(emulator.screen[0x05 + 0x07*CHIP8_SCREEN_WIDTH + 2], PixelStatus::Black);
+        assert_eq!(emulator.screen[0x05 + 0x07*CHIP8_SCREEN_WIDTH + 3], PixelStatus::Black);
+        assert_eq!(emulator.screen[0x05 + 0x07*CHIP8_SCREEN_WIDTH + 4], PixelStatus::White);
+        assert_eq!(emulator.screen[0x05 + 0x07*CHIP8_SCREEN_WIDTH + 5], PixelStatus::White);
+        assert_eq!(emulator.screen[0x05 + 0x07*CHIP8_SCREEN_WIDTH + 6], PixelStatus::Black);
+        assert_eq!(emulator.screen[0x05 + 0x07*CHIP8_SCREEN_WIDTH + 7], PixelStatus::Black);
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test_opcode_FX55() {
+        let mut emulator = EmulatorCpuMemory::new();
+        emulator.load_program(&[0x60, 0b10101010, 0x61, 0b00110011, 0xA1, 0x55, 0xF1, 0x55]);
+
+        emulator.process_next_instruction();
+        emulator.process_next_instruction();
+        emulator.process_next_instruction();
+        assert_eq!(emulator.generic_registers[0x0], 0b10101010);
+        assert_eq!(emulator.generic_registers[0x1], 0b00110011);
+        assert_eq!(emulator.memory_register, 0x155);
+        assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 6);
+
+        emulator.process_next_instruction();
+        assert_eq!(emulator.memory[0x155], 0b10101010);
+        assert_eq!(emulator.memory[0x156], 0b00110011);
+        assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 8);
     }
 }
