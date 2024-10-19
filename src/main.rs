@@ -1,6 +1,7 @@
 mod emulator;
 extern crate sdl2;
 
+use emulator::{CHIP8_SCREEN_HEIGHT, CHIP8_SCREEN_WIDTH};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
@@ -16,7 +17,7 @@ fn main() {
 
     let window = video_subsystem
         .window(
-            "rust-sdl2 demo",SDL_SCREEN_WIDTH, SDL_SCREEN_HEIGHT
+            "CHIP8 emulator",SDL_SCREEN_WIDTH, SDL_SCREEN_HEIGHT
         )
         .position_centered()
         .build()
@@ -27,7 +28,25 @@ fn main() {
     let mut event_pump = sdl_context.event_pump().unwrap();
 
     let mut emulator = emulator::EmulatorCpuMemory::new();
-    emulator.load_program(&[0x6A, 0x15]);
+    emulator.load_program(&[
+        // Set V0 to sprite value
+        0x60, 0b10101010,
+        // Set I to random address in memory
+        0xA3, 0x00,
+        // Store the content of V0 to I in memory
+        0xF0, 0x55,
+        // Set x and y position to paste sprite in V0 and V1
+        0x60, 0x05,
+        0x80, 0x24,
+        0x61, 0x06,
+        // Finally, paste sprite
+        0xD0, 0x10,
+
+        // Increment V2 by 1
+        0x72, 0x01,
+        // Back to square one
+        0x12, 0x00,
+    ]);
 
     'running: loop {
         // Clear screen
@@ -47,8 +66,25 @@ fn main() {
                     ..
                 } => {
                     emulator.process_next_instruction();
+                    println!();
                 }
                 _ => {}
+            }
+        }
+
+        canvas.set_draw_color(Color::WHITE);
+        for i in 0..CHIP8_SCREEN_WIDTH {
+            for j in 0..CHIP8_SCREEN_HEIGHT {
+                match emulator.screen[j*CHIP8_SCREEN_WIDTH+i] {
+                    emulator::PixelStatus::Black => (),
+                    emulator::PixelStatus::White => {
+                        let i = i as i32;
+                        let j = j as i32;
+                        let pixel_size_ratio = PIXEL_SIZE_RATIO as i32;
+                        let white_pixel = sdl2::rect::Rect::new(i*pixel_size_ratio, j*pixel_size_ratio, PIXEL_SIZE_RATIO as u32, PIXEL_SIZE_RATIO as u32);
+                        canvas.fill_rect(white_pixel).unwrap();
+                    },
+                }
             }
         }
 

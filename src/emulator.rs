@@ -174,7 +174,7 @@ fn parse_opcode(raw_opcode: u16) -> Option<OpCode> {
 }
 
 #[derive(PartialEq, Debug)]
-enum PixelStatus {
+pub enum PixelStatus {
     Black,
     White,
 }
@@ -184,7 +184,7 @@ pub struct EmulatorCpuMemory {
     program_counter: usize,                          // pc
     generic_registers: [u8; CHIP8_NUMBER_REGISTERS], // V0..VF
     memory_register: usize,                          // I
-    screen: [PixelStatus; (CHIP8_SCREEN_WIDTH * CHIP8_SCREEN_HEIGHT) as usize],
+    pub screen: [PixelStatus; (CHIP8_SCREEN_WIDTH * CHIP8_SCREEN_HEIGHT) as usize],
 }
 
 const SCREEN_ARRAY_REPEAT_VALUE: PixelStatus = PixelStatus::Black;
