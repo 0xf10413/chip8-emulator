@@ -26,6 +26,7 @@ enum OpCode {
     OC_8XY7(usize, usize),
     OC_8XYE(usize, usize),
     OC_9XY0(usize, usize),
+    OC_ANNN(usize),
 }
 
 fn parse_opcode(raw_opcode: u16) -> Option<OpCode> {
@@ -146,6 +147,12 @@ fn parse_opcode(raw_opcode: u16) -> Option<OpCode> {
         return Some(OpCode::OC_9XY0(x, y));
     }
 
+    // ANNN
+    if raw_opcode & 0xF000 == 0xA000 {
+        let nnn: usize = (0x0FFF & raw_opcode) as usize;
+        return Some(OpCode::OC_ANNN(nnn));
+    }
+
     return None;
 }
 
@@ -154,7 +161,7 @@ pub struct EmulatorCpuMemory {
     memory: [u8; CHIP8_MEMORY_SIZE],
     program_counter: usize,                          // pc
     generic_registers: [u8; CHIP8_NUMBER_REGISTERS], // V0..VF
-    memory_register: u16,                            // I
+    memory_register: usize,                          // I
                                                      //call_stack: [usize; CHIP8_CALL_STACK_SIZE], // TODO: make an actual stack struct
                                                      //call_stack_index: usize, // TODO: make an actual stack struct
 }
@@ -211,7 +218,7 @@ impl EmulatorCpuMemory {
             }
 
             OpCode::OC_1NNN(nnn) => {
-                // Next instruction will be at address NN
+                // Next instruction will be at address NNN
                 println!("Setting pc to {}", nnn);
                 self.program_counter = *nnn - 2; // TODO: increase pc in this function to avoid hack?
             }
@@ -334,6 +341,12 @@ impl EmulatorCpuMemory {
                 if self.generic_registers[*x] != self.generic_registers[*y] {
                     self.program_counter += 2;
                 }
+            }
+
+            OpCode::OC_ANNN(nnn) => {
+                // Set register I to NNN
+                println!("Setting I to {}", nnn);
+                self.memory_register = *nnn;
             }
         }
     }
@@ -653,5 +666,15 @@ mod tests {
         assert_eq!(emulator.generic_registers[0xA], 0x01);
         assert_eq!(emulator.generic_registers[0xB], 0x01);
         assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 12);
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test_opcode_ANNN() {
+        let mut emulator = EmulatorCpuMemory::new();
+        emulator.load_program(&[0xAF, 0xEB]);
+        emulator.process_next_instruction();
+        assert_eq!(emulator.memory_register, 0x0FEB);
+        assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 2);
     }
 }
