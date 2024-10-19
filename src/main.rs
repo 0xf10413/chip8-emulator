@@ -48,6 +48,8 @@ fn main() {
         0x12, 0x00,
     ]);
 
+    emulator.load_program(std::fs::read("BLINKY").unwrap().as_slice());
+
     'running: loop {
         // Clear screen
         canvas.set_draw_color(Color::RGB(0, 0, 0));

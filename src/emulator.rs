@@ -42,7 +42,7 @@ enum OpCode {
     // FX29
     // FX33
     OC_FX55(usize),
-    // FX65
+    OC_FX65(usize),
 }
 
 fn parse_opcode(raw_opcode: u16) -> Option<OpCode> {
@@ -203,6 +203,12 @@ fn parse_opcode(raw_opcode: u16) -> Option<OpCode> {
     if raw_opcode & 0xF0FF == 0xF055 {
         let x: usize = ((0x0F00 & raw_opcode) >> 8) as usize;
         return Some(OpCode::OC_FX55(x));
+    }
+
+    // FX65
+    if raw_opcode & 0xF0FF == 0xF065 {
+        let x: usize = ((0x0F00 & raw_opcode) >> 8) as usize;
+        return Some(OpCode::OC_FX65(x));
     }
 
     return None;
@@ -471,6 +477,14 @@ impl EmulatorCpuMemory {
                 for i in 0..=*x {
                     println!("Loading V{:x} {:b} at {:x}", i, self.generic_registers[i], self.memory_register+i);
                     self.memory[self.memory_register+i] = self.generic_registers[i];
+                }
+            }
+
+            OpCode::OC_FX65(x) => {
+                // Load bytes in memory at I into V0, ..., VX
+                println!("Loading bytes from I into V0, ..., V{:X}", x);
+                for i in 0..=*x {
+                    self.generic_registers[i] = self.memory[self.memory_register+i];
                 }
             }
         }
@@ -911,4 +925,22 @@ mod tests {
         assert_eq!(emulator.memory[0x156], 0b00110011);
         assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 8);
     }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test_opcode_FX65() {
+        let mut emulator = EmulatorCpuMemory::new();
+        emulator.load_program(&[0xF1, 0x65]);
+
+        // Cheating a bit with the setup to go faster
+        emulator.memory[0xF00] = 0b10101010;
+        emulator.memory[0xF01] = 0b11001100;
+        emulator.memory_register = 0xF00;
+
+        emulator.process_next_instruction();
+        assert_eq!(emulator.generic_registers[0x0], 0b10101010);
+        assert_eq!(emulator.generic_registers[0x1], 0b11001100);
+        assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 2);
+    }
+
 }
