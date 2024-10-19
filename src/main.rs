@@ -3,95 +3,32 @@ const CHIP8_FIRST_BYTE_ADDRESS: usize = 512;
 const CHIP8_NUMBER_REGISTERS: usize = 16;
 //const CHIP8_CALL_STACK_SIZE: usize = 16;
 
+
+
+
+#[allow(non_camel_case_types)]
 #[derive(Debug)]
-struct OpCode<'a> {
-    id: u16,
-    mask: u16,
-    name: &'a str,
-    update_state: fn(&mut EmulatorCpuMemory, u16) -> (),
+enum OpCode {
+    OC_0NNN(u16),
+    OC_6XNN(usize, u8),
 }
 
-impl OpCode<'_> {
-    fn identify(&self, read_opcode: u16) -> bool {
-        println!(
-            "{}: {:#06x} & {:#06x} = {:#06x} vs {:#06x}",
-            self.name,
-            read_opcode,
-            self.mask,
-            read_opcode & self.mask,
-            self.id
-        );
-        return read_opcode & self.mask == self.id;
+fn parse_opcode(raw_opcode: u16) -> Option<OpCode> {
+    // 0NNN
+    if raw_opcode & 0x0FFF == 0x0000 {
+        let nnn: u16 = raw_opcode & 0x0FFF;
+        return Some(OpCode::OC_0NNN(nnn));
     }
-}
 
-fn unimplemented_opcode(_emulator: &mut EmulatorCpuMemory, _read_opcode: u16) {
-    panic!("Opcode is not implemented yet!")
-}
+    // 6XNN
+    if raw_opcode & 0xF000 == 0x6000 {
+        let x: usize = ((0x0F00 & raw_opcode) >> 8) as usize;
+        let nn: u8 = (0x00FF & raw_opcode) as u8;
+        return Some(OpCode::OC_6XNN(x, nn));
+    }
 
-const OPCODES: [OpCode; 9] = [
-    OpCode {
-        id: 0x0FFF,
-        mask: 0x000,
-        name: "0NNN",
-        update_state: unimplemented_opcode,
-    },
-    OpCode {
-        id: 0x00E0,
-        mask: 0xFFFF,
-        name: "00E0",
-        update_state: unimplemented_opcode,
-    },
-    OpCode {
-        id: 0x00EE,
-        mask: 0xFFFF,
-        name: "00EE",
-        update_state: unimplemented_opcode,
-    },
-    OpCode {
-        id: 0x1000,
-        mask: 0xF000,
-        name: "1NNN",
-        update_state: unimplemented_opcode,
-    },
-    OpCode {
-        id: 0x2000,
-        mask: 0xF000,
-        name: "2NNN",
-        update_state: unimplemented_opcode,
-    },
-    OpCode {
-        id: 0x3000,
-        mask: 0xF000,
-        name: "3XNN",
-        update_state: unimplemented_opcode,
-    },
-    OpCode {
-        id: 0x4000,
-        mask: 0xF000,
-        name: "4XNN",
-        update_state: unimplemented_opcode,
-    },
-    OpCode {
-        id: 0x5000,
-        mask: 0xF00F,
-        name: "5XY0",
-        update_state: unimplemented_opcode,
-    },
-    OpCode {
-        id: 0x6000,
-        mask: 0xF000,
-        name: "6XNN",
-        update_state: |emulator, read_opcode| {
-            // 6XNN: Defines register VX to NN
-            let x: usize = ((0x0F00 & read_opcode) >> 8).into();
-            let nn: u8 = 0x00FF & read_opcode as u8;
-            println!("6XNN: Found X = {:#03x} and NN = {:#04x}", x, nn);
-            println!("Setting register V{:X} to {:#X}", x, nn);
-            emulator.generic_registers[x] = nn;
-        },
-    },
-];
+    return None;
+}
 
 #[derive(Debug)]
 struct EmulatorCpuMemory {
@@ -99,8 +36,8 @@ struct EmulatorCpuMemory {
     program_counter: usize,
     generic_registers: [u8; CHIP8_NUMBER_REGISTERS],
     //opcode_register: u8,
-    //call_stack: [usize; CHIP8_CALL_STACK_SIZE],
-    //call_stack_index: usize, // TODO: make an actual stack
+    //call_stack: [usize; CHIP8_CALL_STACK_SIZE], // TODO: make an actual stack struct
+    //call_stack_index: usize, // TODO: make an actual stack struct
 }
 
 impl EmulatorCpuMemory {
@@ -122,16 +59,32 @@ impl EmulatorCpuMemory {
         let opcode_first_part: u16 = self.memory[self.program_counter] as u16;
         let opcode_second_part: u16 = self.memory[self.program_counter + 1] as u16;
         let opcode_raw: u16 = (opcode_first_part << 8) + opcode_second_part;
-        println!("Opcode read: {:#06x}", opcode_raw);
+        println!("Bytes read, to be parsed as opcode: {:#06X}", opcode_raw);
 
-        let identified_opcode = OPCODES.iter().find(|&x| x.identify(opcode_raw));
+        let identified_opcode = parse_opcode(opcode_raw);
 
         match identified_opcode {
-            Some(opcode) => println!("Identified read opcode as {}", opcode.name),
+            Some(ref opcode) => {
+                println!("Identified read opcode as {:?}", opcode);
+                self._process_opcode(identified_opcode.unwrap());
+            }
             None => panic!("Unidentified opcode!"),
         }
+    }
 
-        (identified_opcode.unwrap().update_state)(self, opcode_raw);
+    fn _process_opcode(&mut self, opcode: OpCode) {
+        match opcode {
+            OpCode::OC_0NNN(_) => {
+                // 0NNN: Calls code routine at address NNN
+                panic!("OpCode 0NNN not implemented!")
+            }
+
+            OpCode::OC_6XNN(x, nn) => {
+                // 6XNN: Defines register VX to NN
+                println!("Setting register V{:X} to {:#X}", x, nn);
+                self.generic_registers[x] = nn;
+            }
+        }
     }
 }
 
@@ -152,8 +105,8 @@ mod tests {
     fn test_opcode_6XNN() {
         let mut state = EmulatorCpuMemory::new();
         state.memory[CHIP8_FIRST_BYTE_ADDRESS] = 0x6A;
-        state.memory[CHIP8_FIRST_BYTE_ADDRESS + 1] = 0x10;
-        state.process_next_instruction();    
-        assert_eq!(state.generic_registers[0xA], 0x10);
+        state.memory[CHIP8_FIRST_BYTE_ADDRESS + 1] = 0x15;
+        state.process_next_instruction();
+        assert_eq!(state.generic_registers[0xA], 0x15);
     }
 }
