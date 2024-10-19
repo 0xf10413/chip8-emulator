@@ -3,9 +3,6 @@ const CHIP8_FIRST_BYTE_ADDRESS: usize = 512;
 const CHIP8_NUMBER_REGISTERS: usize = 16;
 //const CHIP8_CALL_STACK_SIZE: usize = 16;
 
-
-
-
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
 enum OpCode {
@@ -61,18 +58,23 @@ impl EmulatorCpuMemory {
         let opcode_raw: u16 = (opcode_first_part << 8) + opcode_second_part;
         println!("Bytes read, to be parsed as opcode: {:#06X}", opcode_raw);
 
+        // Parse what we just read
         let identified_opcode = parse_opcode(opcode_raw);
 
+        // Process the new opcode
         match identified_opcode {
             Some(ref opcode) => {
                 println!("Identified read opcode as {:?}", opcode);
-                self._process_opcode(identified_opcode.unwrap());
+                self._process_opcode(opcode);
             }
             None => panic!("Unidentified opcode!"),
         }
+
+        // Jump to next instruction
+        self.program_counter += 2;
     }
 
-    fn _process_opcode(&mut self, opcode: OpCode) {
+    fn _process_opcode(&mut self, opcode: &OpCode) {
         match opcode {
             OpCode::OC_0NNN(_) => {
                 // 0NNN: Calls code routine at address NNN
@@ -82,7 +84,7 @@ impl EmulatorCpuMemory {
             OpCode::OC_6XNN(x, nn) => {
                 // 6XNN: Defines register VX to NN
                 println!("Setting register V{:X} to {:#X}", x, nn);
-                self.generic_registers[x] = nn;
+                self.generic_registers[*x] = *nn;
             }
         }
     }
@@ -108,5 +110,6 @@ mod tests {
         state.memory[CHIP8_FIRST_BYTE_ADDRESS + 1] = 0x15;
         state.process_next_instruction();
         assert_eq!(state.generic_registers[0xA], 0x15);
+        assert_eq!(state.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 2)
     }
 }
