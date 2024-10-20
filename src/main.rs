@@ -55,158 +55,158 @@ fn main() {
                 Event::KeyDown {
                     keycode: Some(Keycode::KP_0),
                     ..
-                } => emulator.keys_pressed[0x00] = true,
+                } => emulator.input_key(0x00, true),
                 Event::KeyUp {
                     keycode: Some(Keycode::KP_0),
                     ..
-                } => emulator.keys_pressed[0x00] = false,
+                } => emulator.input_key(0x00, false),
 
                 Event::KeyDown {
                     keycode: Some(Keycode::KP_1),
                     ..
-                } => emulator.keys_pressed[0x01] = true,
+                } => emulator.input_key(0x01, true),
                 Event::KeyUp {
                     keycode: Some(Keycode::KP_1),
                     ..
-                } => emulator.keys_pressed[0x01] = false,
+                } => emulator.input_key(0x01, false),
 
                 Event::KeyDown {
                     keycode: Some(Keycode::KP_2),
                     ..
-                } => emulator.keys_pressed[0x02] = true,
+                } => emulator.input_key(0x02, true),
                 Event::KeyUp {
                     keycode: Some(Keycode::KP_2),
                     ..
-                } => emulator.keys_pressed[0x02] = false,
+                } => emulator.input_key(0x02, false),
 
                 Event::KeyDown {
                     keycode: Some(Keycode::KP_3),
                     ..
-                } => emulator.keys_pressed[0x03] = true,
+                } => emulator.input_key(0x03, true),
                 Event::KeyUp {
                     keycode: Some(Keycode::KP_3),
                     ..
-                } => emulator.keys_pressed[0x03] = false,
+                } => emulator.input_key(0x03, false),
 
                 Event::KeyDown {
                     keycode: Some(Keycode::KP_4),
                     ..
-                } => emulator.keys_pressed[0x04] = true,
+                } => emulator.input_key(0x04, true),
                 Event::KeyUp {
                     keycode: Some(Keycode::KP_4),
                     ..
-                } => emulator.keys_pressed[0x04] = false,
+                } => emulator.input_key(0x04, false),
 
                 Event::KeyDown {
                     keycode: Some(Keycode::KP_5),
                     ..
-                } => emulator.keys_pressed[0x05] = true,
+                } => emulator.input_key(0x05, true),
                 Event::KeyUp {
                     keycode: Some(Keycode::KP_5),
                     ..
-                } => emulator.keys_pressed[0x05] = false,
+                } => emulator.input_key(0x05, false),
 
                 Event::KeyDown {
                     keycode: Some(Keycode::KP_6),
                     ..
-                } => emulator.keys_pressed[0x06] = true,
+                } => emulator.input_key(0x06, true),
                 Event::KeyUp {
                     keycode: Some(Keycode::KP_6),
                     ..
-                } => emulator.keys_pressed[0x06] = false,
+                } => emulator.input_key(0x06, false),
 
                 Event::KeyDown {
                     keycode: Some(Keycode::KP_7),
                     ..
-                } => emulator.keys_pressed[0x07] = true,
+                } => emulator.input_key(0x07, true),
                 Event::KeyUp {
                     keycode: Some(Keycode::KP_7),
                     ..
-                } => emulator.keys_pressed[0x07] = false,
+                } => emulator.input_key(0x07, false),
 
                 Event::KeyDown {
                     keycode: Some(Keycode::KP_8),
                     ..
-                } => emulator.keys_pressed[0x08] = true,
+                } => emulator.input_key(0x08, true),
                 Event::KeyUp {
                     keycode: Some(Keycode::KP_8),
                     ..
-                } => emulator.keys_pressed[0x08] = false,
+                } => emulator.input_key(0x08, false),
 
                 Event::KeyDown {
                     keycode: Some(Keycode::KP_9),
                     ..
-                } => emulator.keys_pressed[0x09] = true,
+                } => emulator.input_key(0x09, true),
                 Event::KeyUp {
                     keycode: Some(Keycode::KP_9),
                     ..
-                } => emulator.keys_pressed[0x09] = false,
+                } => emulator.input_key(0x09, false),
 
                 Event::KeyDown {
                     keycode: Some(Keycode::A),
                     ..
-                } => emulator.keys_pressed[0xA] = true,
+                } => emulator.input_key(0xA, true),
                 Event::KeyUp {
                     keycode: Some(Keycode::A),
                     ..
-                } => emulator.keys_pressed[0xA] = false,
+                } => emulator.input_key(0xA, false),
 
                 Event::KeyDown {
                     keycode: Some(Keycode::Z),
                     ..
-                } => emulator.keys_pressed[0xB] = true,
+                } => emulator.input_key(0xB, true),
                 Event::KeyUp {
                     keycode: Some(Keycode::Z),
                     ..
-                } => emulator.keys_pressed[0xB] = false,
+                } => emulator.input_key(0xB, false),
 
                 Event::KeyDown {
                     keycode: Some(Keycode::E),
                     ..
-                } => emulator.keys_pressed[0xC] = true,
+                } => emulator.input_key(0xC, true),
                 Event::KeyUp {
                     keycode: Some(Keycode::E),
                     ..
-                } => emulator.keys_pressed[0xC] = false,
+                } => emulator.input_key(0xC, false),
 
                 Event::KeyDown {
                     keycode: Some(Keycode::R),
                     ..
-                } => emulator.keys_pressed[0xD] = true,
+                } => emulator.input_key(0xD, true),
                 Event::KeyUp {
                     keycode: Some(Keycode::R),
                     ..
-                } => emulator.keys_pressed[0xD] = false,
+                } => emulator.input_key(0xD, false),
 
                 Event::KeyDown {
                     keycode: Some(Keycode::T),
                     ..
-                } => emulator.keys_pressed[0xE] = true,
+                } => emulator.input_key(0xE, true),
                 Event::KeyUp {
                     keycode: Some(Keycode::T),
                     ..
-                } => emulator.keys_pressed[0xE] = false,
+                } => emulator.input_key(0xE, false),
 
                 Event::KeyDown {
                     keycode: Some(Keycode::Y),
                     ..
-                } => emulator.keys_pressed[0xF] = true,
+                } => emulator.input_key(0xF, true),
                 Event::KeyUp {
                     keycode: Some(Keycode::Y),
                     ..
-                } => emulator.keys_pressed[0xF] = false,
+                } => emulator.input_key(0xF, false),
 
                 _ => {}
             }
         }
 
         // Several cpu cycles per render cycle
-        for _ in 0..20 {
-            emulator.process_next_instruction();
-            println!();
+        if !emulator.waiting_for_key {
+            for _ in 0..20 {
+                emulator.process_next_instruction();
+                println!();
+            }
         }
-
-        println!("{:?}", emulator.keys_pressed);
 
         if emulator.system_clock > 0 {
             emulator.system_clock -= 1;

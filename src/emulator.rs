@@ -36,7 +36,7 @@ enum OpCode {
     OC_EX9E(usize),
     OC_EXA1(usize),
     OC_FX07(usize),
-    // FX0A
+    OC_FX0A(usize),
     OC_FX15(usize),
     OC_FX18(usize),
     OC_FX1E(usize),
@@ -219,6 +219,12 @@ fn parse_opcode(raw_opcode: u16) -> Option<OpCode> {
         return Some(OpCode::OC_FX07(x));
     }
 
+    // FX0A
+    if raw_opcode & 0xF0FF == 0xF00A {
+        let x: usize = ((0x0F00 & raw_opcode) >> 8) as usize;
+        return Some(OpCode::OC_FX0A(x));
+    }
+
     // FX15
     if raw_opcode & 0xF0FF == 0xF015 {
         let x: usize = ((0x0F00 & raw_opcode) >> 8) as usize;
@@ -266,9 +272,11 @@ pub struct Emulator {
     pub screen: [PixelStatus; (CHIP8_SCREEN_WIDTH * CHIP8_SCREEN_HEIGHT) as usize],
     call_stack: [usize; CHIP8_CALL_STACK_MAX_DEPTH],
     call_stack_depth: usize,
-    pub keys_pressed: [bool; CHIP8_NUMBER_KEYS],
+    keys_pressed: [bool; CHIP8_NUMBER_KEYS],
     pub system_clock: u8,
     pub sound_clock: u8,
+    pub waiting_for_key: bool,
+    register_for_key: usize,
 }
 
 const SCREEN_ARRAY_REPEAT_VALUE: PixelStatus = PixelStatus::Black;
@@ -286,6 +294,8 @@ impl Emulator {
             keys_pressed: [false; CHIP8_NUMBER_KEYS],
             system_clock: 0,
             sound_clock: 0,
+            waiting_for_key: false,
+            register_for_key: 0,
         }
     }
 
@@ -294,6 +304,14 @@ impl Emulator {
             self.memory[CHIP8_FIRST_BYTE_ADDRESS + i] = *byte
         }
         self.program_counter = CHIP8_FIRST_BYTE_ADDRESS;
+    }
+
+    pub fn input_key(&mut self, keycode: u8, keypressed: bool) {
+        self.keys_pressed[keycode as usize] = keypressed;
+        if self.waiting_for_key && keypressed {
+            self.generic_registers[self.register_for_key] = keycode;
+            self.waiting_for_key = false;
+        }
     }
 
     pub fn process_next_instruction(&mut self) {
@@ -546,6 +564,14 @@ impl Emulator {
                 println!("Setting V{:X} to the current value of system clock", x);
                 self.generic_registers[*x] = self.system_clock;
             }
+
+            OpCode::OC_FX0A(x) => {
+                // Request for a key to be put in a certain buffer
+                println!("Requesting next key to be stored in V{:X}", x);
+                self.waiting_for_key = true;
+                self.register_for_key = *x;
+            }
+
 
             OpCode::OC_FX18(x) => {
                 // Sets the sound clock to the current value of VX
@@ -1105,6 +1131,27 @@ mod tests {
         emulator.process_next_instruction();
         assert_eq!(emulator.generic_registers[0x00], 0x11);
         assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 4);
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test_opcode_FX0A() {
+        let mut emulator = Emulator::new();
+        emulator.load_program(&[0xFA, 0x0A]);
+
+        assert_eq!(emulator.waiting_for_key, false);
+        assert_eq!(emulator.register_for_key, 0x0);
+        emulator.process_next_instruction();
+        assert_eq!(emulator.waiting_for_key, true);
+        assert_eq!(emulator.register_for_key, 0xA);
+
+        emulator.input_key(0xE, false);
+        assert_eq!(emulator.waiting_for_key, true);
+        assert_eq!(emulator.generic_registers[0xA], 0x0);
+
+        emulator.input_key(0xE, true);
+        assert_eq!(emulator.waiting_for_key, false);
+        assert_eq!(emulator.generic_registers[0xA], 0xE);
     }
 
     #[test]
