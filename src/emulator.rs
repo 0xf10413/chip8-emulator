@@ -31,7 +31,7 @@ enum OpCode {
     OC_9XY0(usize, usize),
     OC_ANNN(usize),
     // BNNN
-    // CXNN
+    OC_CXNN(usize, u8),
     OC_DXYN(usize, usize, usize),
     OC_EX9E(usize),
     OC_EXA1(usize),
@@ -186,6 +186,13 @@ fn parse_opcode(raw_opcode: u16) -> Option<OpCode> {
         return Some(OpCode::OC_ANNN(nnn));
     }
 
+    // CXNN
+    if raw_opcode & 0xF000 == 0xC000 {
+        let x: usize = ((0x0F00 & raw_opcode) >> 8) as usize;
+        let nn: u8 = (0x00FF & raw_opcode) as u8;
+        return Some(OpCode::OC_CXNN(x, nn));
+    }
+
     // DXYN
     if raw_opcode & 0xF000 == 0xD000 {
         let x: usize = ((0x0F00 & raw_opcode) >> 8) as usize;
@@ -241,7 +248,7 @@ pub struct Emulator {
     pub screen: [PixelStatus; (CHIP8_SCREEN_WIDTH * CHIP8_SCREEN_HEIGHT) as usize],
     call_stack: [usize; CHIP8_CALL_STACK_MAX_DEPTH],
     call_stack_depth: usize,
-    keys_pressed: [bool; CHIP8_NUMBER_KEYS],
+    pub keys_pressed: [bool; CHIP8_NUMBER_KEYS],
 }
 
 const SCREEN_ARRAY_REPEAT_VALUE: PixelStatus = PixelStatus::Black;
@@ -452,6 +459,12 @@ impl Emulator {
                 // Set register I to NNN
                 println!("Setting I to {}", nnn);
                 self.memory_register = *nnn;
+            }
+
+            OpCode::OC_CXNN(x, nn) => {
+                // Set register VX to a random number between 0 and nn
+                println!("Setting V{:x} to a random number less than {}", x, nn);
+                self.generic_registers[*x] = rand::random::<u8>() % nn;
             }
 
             OpCode::OC_DXYN(x, y, n) => {
@@ -869,6 +882,18 @@ mod tests {
         emulator.load_program(&[0xAF, 0xEB]);
         emulator.process_next_instruction();
         assert_eq!(emulator.memory_register, 0x0FEB);
+        assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 2);
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test_opcode_CXNN() {
+        let mut emulator = Emulator::new();
+        emulator.load_program(&[0xC0, 0x10]);
+
+        emulator.generic_registers[0x0] = 0x11;
+        emulator.process_next_instruction();
+        assert_ne!(emulator.generic_registers[0x0], 0x11);
         assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 2);
     }
 

@@ -63,7 +63,8 @@ fn main() {
                     keycode: Some(Keycode::Escape),
                     ..
                 } => break 'running,
-                Event::KeyDown { keycode: Some(Keycode::NUM_8), ..} => panic!("Not implemented!"),
+                Event::KeyDown { keycode: Some(Keycode::NUM_8), ..} => emulator.keys_pressed[0x00] = true,
+                Event::KeyUp { keycode: Some(Keycode::NUM_8), ..} => emulator.keys_pressed[0x00] = false,
                 _ => {}
             }
         }
