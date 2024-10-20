@@ -8,7 +8,7 @@ use sdl2::pixels::Color;
 use sdl2::audio::{AudioCallback, AudioSpecDesired};
 use std::time::Duration;
 
-const PIXEL_SIZE_RATIO: u32 = 10;
+const PIXEL_SIZE_RATIO: u32 = 15;
 const SDL_SCREEN_WIDTH: u32 = (emulator::CHIP8_SCREEN_WIDTH as u32) * PIXEL_SIZE_RATIO;
 const SDL_SCREEN_HEIGHT: u32 = (emulator::CHIP8_SCREEN_HEIGHT as u32) * PIXEL_SIZE_RATIO;
 
@@ -63,18 +63,8 @@ fn main() {
     let mut event_pump = sdl_context.event_pump().unwrap();
 
     let mut emulator = emulator::Emulator::new();
-    emulator.load_program(&[
-        // Set V0 to sprite value
-        0x60, 0b10101010, // Set I to random address in memory
-        0xA3, 0x00, // Store the content of V0 to I in memory
-        0xF0, 0x55, // Set x and y position to paste sprite in V0 and V1
-        0x60, 0x05, 0x80, 0x24, 0x61, 0x06, // Finally, paste sprite
-        0xD0, 0x10, // Increment V2 by 1
-        0x72, 0x01, // Back to square one
-        0x12, 0x00,
-    ]);
 
-    emulator.load_program(std::fs::read("INVADERS").unwrap().as_slice());
+    emulator.load_program(std::fs::read("roms/BLINKY").unwrap().as_slice());
 
     'running: loop {
         // Clear screen
