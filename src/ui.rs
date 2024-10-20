@@ -34,6 +34,28 @@ impl AudioCallback for SquareWave {
     }
 }
 
+fn map_sdl_keycode_to_chip8_code(sdl_code: Keycode) -> Option<u8> {
+    match sdl_code {
+        Keycode::KP_0 => Some(0x00),
+        Keycode::KP_1 => Some(0x01),
+        Keycode::KP_2 => Some(0x02),
+        Keycode::KP_3 => Some(0x03),
+        Keycode::KP_4 => Some(0x04),
+        Keycode::KP_5 => Some(0x05),
+        Keycode::KP_6 => Some(0x06),
+        Keycode::KP_7 => Some(0x07),
+        Keycode::KP_8 => Some(0x08),
+        Keycode::KP_9 => Some(0x09),
+        Keycode::A => Some(0x0A),
+        Keycode::Z => Some(0x0B),
+        Keycode::E => Some(0x0C),
+        Keycode::R => Some(0x0D),
+        Keycode::T => Some(0x0E),
+        Keycode::Y => Some(0x0F),
+        _ => None,
+    }
+}
+
 pub fn run_program() {
     // SDL setup
     let sdl_context = sdl2::init().unwrap();
@@ -88,149 +110,19 @@ pub fn run_program() {
                     ..
                 } => break 'running,
                 Event::KeyDown {
-                    keycode: Some(Keycode::KP_0),
+                    keycode: Some(keycode),
                     ..
-                } => emulator.input_key(0x00, true),
+                } => match map_sdl_keycode_to_chip8_code(keycode) {
+                    Some(chip8_code) => emulator.input_key(chip8_code, true),
+                    None => (),
+                },
                 Event::KeyUp {
-                    keycode: Some(Keycode::KP_0),
+                    keycode: Some(keycode),
                     ..
-                } => emulator.input_key(0x00, false),
-
-                Event::KeyDown {
-                    keycode: Some(Keycode::KP_1),
-                    ..
-                } => emulator.input_key(0x01, true),
-                Event::KeyUp {
-                    keycode: Some(Keycode::KP_1),
-                    ..
-                } => emulator.input_key(0x01, false),
-
-                Event::KeyDown {
-                    keycode: Some(Keycode::KP_2),
-                    ..
-                } => emulator.input_key(0x02, true),
-                Event::KeyUp {
-                    keycode: Some(Keycode::KP_2),
-                    ..
-                } => emulator.input_key(0x02, false),
-
-                Event::KeyDown {
-                    keycode: Some(Keycode::KP_3),
-                    ..
-                } => emulator.input_key(0x03, true),
-                Event::KeyUp {
-                    keycode: Some(Keycode::KP_3),
-                    ..
-                } => emulator.input_key(0x03, false),
-
-                Event::KeyDown {
-                    keycode: Some(Keycode::KP_4),
-                    ..
-                } => emulator.input_key(0x04, true),
-                Event::KeyUp {
-                    keycode: Some(Keycode::KP_4),
-                    ..
-                } => emulator.input_key(0x04, false),
-
-                Event::KeyDown {
-                    keycode: Some(Keycode::KP_5),
-                    ..
-                } => emulator.input_key(0x05, true),
-                Event::KeyUp {
-                    keycode: Some(Keycode::KP_5),
-                    ..
-                } => emulator.input_key(0x05, false),
-
-                Event::KeyDown {
-                    keycode: Some(Keycode::KP_6),
-                    ..
-                } => emulator.input_key(0x06, true),
-                Event::KeyUp {
-                    keycode: Some(Keycode::KP_6),
-                    ..
-                } => emulator.input_key(0x06, false),
-
-                Event::KeyDown {
-                    keycode: Some(Keycode::KP_7),
-                    ..
-                } => emulator.input_key(0x07, true),
-                Event::KeyUp {
-                    keycode: Some(Keycode::KP_7),
-                    ..
-                } => emulator.input_key(0x07, false),
-
-                Event::KeyDown {
-                    keycode: Some(Keycode::KP_8),
-                    ..
-                } => emulator.input_key(0x08, true),
-                Event::KeyUp {
-                    keycode: Some(Keycode::KP_8),
-                    ..
-                } => emulator.input_key(0x08, false),
-
-                Event::KeyDown {
-                    keycode: Some(Keycode::KP_9),
-                    ..
-                } => emulator.input_key(0x09, true),
-                Event::KeyUp {
-                    keycode: Some(Keycode::KP_9),
-                    ..
-                } => emulator.input_key(0x09, false),
-
-                Event::KeyDown {
-                    keycode: Some(Keycode::A),
-                    ..
-                } => emulator.input_key(0xA, true),
-                Event::KeyUp {
-                    keycode: Some(Keycode::A),
-                    ..
-                } => emulator.input_key(0xA, false),
-
-                Event::KeyDown {
-                    keycode: Some(Keycode::Z),
-                    ..
-                } => emulator.input_key(0xB, true),
-                Event::KeyUp {
-                    keycode: Some(Keycode::Z),
-                    ..
-                } => emulator.input_key(0xB, false),
-
-                Event::KeyDown {
-                    keycode: Some(Keycode::E),
-                    ..
-                } => emulator.input_key(0xC, true),
-                Event::KeyUp {
-                    keycode: Some(Keycode::E),
-                    ..
-                } => emulator.input_key(0xC, false),
-
-                Event::KeyDown {
-                    keycode: Some(Keycode::R),
-                    ..
-                } => emulator.input_key(0xD, true),
-                Event::KeyUp {
-                    keycode: Some(Keycode::R),
-                    ..
-                } => emulator.input_key(0xD, false),
-
-                Event::KeyDown {
-                    keycode: Some(Keycode::T),
-                    ..
-                } => emulator.input_key(0xE, true),
-                Event::KeyUp {
-                    keycode: Some(Keycode::T),
-                    ..
-                } => emulator.input_key(0xE, false),
-
-                Event::KeyDown {
-                    keycode: Some(Keycode::Y),
-                    ..
-                } => emulator.input_key(0xF, true),
-                Event::KeyUp {
-                    keycode: Some(Keycode::Y),
-                    ..
-                } => emulator.input_key(0xF, false),
-
+                } => match map_sdl_keycode_to_chip8_code(keycode) {
+                    Some(chip8_code) => emulator.input_key(chip8_code, false),
+                    None => (),
+                },
                 _ => {}
             }
         }
