@@ -38,7 +38,7 @@ enum OpCode {
     OC_FX07(usize),
     // FX0A
     OC_FX15(usize),
-    // FX18
+    OC_FX18(usize),
     OC_FX1E(usize),
     // FX29
     // FX33
@@ -225,6 +225,12 @@ fn parse_opcode(raw_opcode: u16) -> Option<OpCode> {
         return Some(OpCode::OC_FX15(x));
     }
 
+    // FX18
+    if raw_opcode & 0xF0FF == 0xF018 {
+        let x: usize = ((0x0F00 & raw_opcode) >> 8) as usize;
+        return Some(OpCode::OC_FX18(x));
+    }
+
     // FX1E
     if raw_opcode & 0xF0FF == 0xF01E {
         let x: usize = ((0x0F00 & raw_opcode) >> 8) as usize;
@@ -262,6 +268,7 @@ pub struct Emulator {
     call_stack_depth: usize,
     pub keys_pressed: [bool; CHIP8_NUMBER_KEYS],
     pub system_clock: u8,
+    pub sound_clock: u8,
 }
 
 const SCREEN_ARRAY_REPEAT_VALUE: PixelStatus = PixelStatus::Black;
@@ -278,6 +285,7 @@ impl Emulator {
             call_stack_depth: 0,
             keys_pressed: [false; CHIP8_NUMBER_KEYS],
             system_clock: 0,
+            sound_clock: 0,
         }
     }
 
@@ -537,6 +545,12 @@ impl Emulator {
                 // Sets VX to the current value of the system clock
                 println!("Setting V{:X} to the current value of system clock", x);
                 self.generic_registers[*x] = self.system_clock;
+            }
+
+            OpCode::OC_FX18(x) => {
+                // Sets the sound clock to the current value of VX
+                println!("Setting the sound clock to the current value of V{:X}", x);
+                self.sound_clock = self.generic_registers[*x];
             }
 
             OpCode::OC_FX15(x) => {
@@ -1091,6 +1105,18 @@ mod tests {
         emulator.process_next_instruction();
         assert_eq!(emulator.generic_registers[0x00], 0x11);
         assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 4);
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test_opcode_FX18() {
+        let mut emulator = Emulator::new();
+        emulator.load_program(&[0xF0, 0x18]);
+
+        emulator.generic_registers[0x00] = 0x16;
+        emulator.process_next_instruction();
+        assert_eq!(emulator.sound_clock, 0x16);
+        assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 2);
     }
 
     #[test]
