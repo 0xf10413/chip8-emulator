@@ -489,6 +489,7 @@ impl Emulator {
                 );
                 let pos_x = self.generic_registers[*x] as usize;
                 let pos_y = self.generic_registers[*y] as usize;
+                let mut any_pixel_turned_off = false;
                 for (offset_y, byte) in self.memory[self.memory_register..self.memory_register + n]
                     .iter()
                     .enumerate()
@@ -506,12 +507,14 @@ impl Emulator {
                                     self.screen[pixel_coordinate] = PixelStatus::White
                                 }
                                 PixelStatus::White => {
-                                    self.screen[pixel_coordinate] = PixelStatus::Black
+                                    self.screen[pixel_coordinate] = PixelStatus::Black;
+                                    any_pixel_turned_off = true;
                                 }
                             }
                         }
                     }
                 }
+                self.generic_registers[0xF] = if any_pixel_turned_off { 1 } else { 0 };
             }
 
             OpCode::OC_EX9E(x) => {
@@ -948,11 +951,12 @@ mod tests {
     #[allow(non_snake_case)]
     fn test_opcode_DXYN() {
         let mut emulator: Emulator = Emulator::new();
-        emulator.load_program(&[0xD0, 0x12]);
+        emulator.load_program(&[0xD0, 0x12, 0xD0, 0x12]);
 
         // Cheating a bit for a faster setup
         emulator.generic_registers[0] = 0x05;
         emulator.generic_registers[1] = 0x06;
+        emulator.generic_registers[0xF] = 0x10;
         emulator.memory_register = 0x300;
         emulator.memory[0x300] = 0b10101010;
         emulator.memory[0x301] = 0b11001100;
@@ -1031,6 +1035,23 @@ mod tests {
             emulator.screen[0x05 + 0x07 * CHIP8_SCREEN_WIDTH + 7],
             PixelStatus::Black
         );
+
+        assert_eq!(emulator.generic_registers[0xF], 0x0);
+
+        // Calling it again, all pixels should be toggled back to black + VF set to 0x01
+        emulator.process_next_instruction();
+        for i in 0..8 {
+            assert_eq!(
+                emulator.screen[0x05 + 0x06 * CHIP8_SCREEN_WIDTH + i],
+                PixelStatus::Black
+            );
+            assert_eq!(
+                emulator.screen[0x05 + 0x07 * CHIP8_SCREEN_WIDTH + i],
+                PixelStatus::Black
+            );
+        }
+        assert_eq!(emulator.generic_registers[0xF], 0x1)
+
     }
 
     #[test]
