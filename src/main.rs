@@ -5,15 +5,52 @@ use emulator::{CHIP8_SCREEN_HEIGHT, CHIP8_SCREEN_WIDTH};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
+use sdl2::audio::{AudioCallback, AudioSpecDesired};
 use std::time::Duration;
 
 const PIXEL_SIZE_RATIO: u32 = 10;
 const SDL_SCREEN_WIDTH: u32 = (emulator::CHIP8_SCREEN_WIDTH as u32) * PIXEL_SIZE_RATIO;
 const SDL_SCREEN_HEIGHT: u32 = (emulator::CHIP8_SCREEN_HEIGHT as u32) * PIXEL_SIZE_RATIO;
 
+struct SquareWave {
+    phase_inc: f32,
+    phase: f32,
+    volume: f32
+}
+
+impl AudioCallback for SquareWave {
+    type Channel = f32;
+
+    fn callback(&mut self, out: &mut [f32]) {
+        // Generate a square wave
+        for x in out.iter_mut() {
+            *x = if self.phase <= 0.5 {
+                self.volume
+            } else {
+                -self.volume
+            };
+            self.phase = (self.phase + self.phase_inc) % 1.0;
+        }
+    }
+}
+
 fn main() {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
+    let audio_subsystem = sdl_context.audio().unwrap();
+    let desired_audio_spec = AudioSpecDesired {
+        freq: Some(44100),
+        channels: Some(1),  // mono
+        samples: None       // default sample size
+    };
+    let device = audio_subsystem.open_playback(None, &desired_audio_spec, |spec| {
+        // initialize the audio callback
+        SquareWave {
+            phase_inc: 440.0 / spec.freq as f32,
+            phase: 0.0,
+            volume: 0.25
+        }
+    }).unwrap();
 
     let window = video_subsystem
         .window("CHIP8 emulator", SDL_SCREEN_WIDTH, SDL_SCREEN_HEIGHT)
@@ -210,6 +247,13 @@ fn main() {
 
         if emulator.system_clock > 0 {
             emulator.system_clock -= 1;
+        }
+
+        if emulator.sound_clock > 0 {
+            device.resume();
+            emulator.sound_clock -= 1;
+        } else {
+            device.pause();
         }
 
         canvas.set_draw_color(Color::WHITE);
