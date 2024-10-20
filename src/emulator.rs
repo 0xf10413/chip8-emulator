@@ -35,9 +35,9 @@ enum OpCode {
     OC_DXYN(usize, usize, usize),
     OC_EX9E(usize),
     OC_EXA1(usize),
-    // FX07
+    OC_FX07(usize),
     // FX0A
-    // FX15
+    OC_FX15(usize),
     // FX18
     OC_FX1E(usize),
     // FX29
@@ -213,6 +213,18 @@ fn parse_opcode(raw_opcode: u16) -> Option<OpCode> {
         return Some(OpCode::OC_EXA1(x));
     }
 
+    // FX07
+    if raw_opcode & 0xF0FF == 0xF007 {
+        let x: usize = ((0x0F00 & raw_opcode) >> 8) as usize;
+        return Some(OpCode::OC_FX07(x));
+    }
+
+    // FX15
+    if raw_opcode & 0xF0FF == 0xF015 {
+        let x: usize = ((0x0F00 & raw_opcode) >> 8) as usize;
+        return Some(OpCode::OC_FX15(x));
+    }
+
     // FX1E
     if raw_opcode & 0xF0FF == 0xF01E {
         let x: usize = ((0x0F00 & raw_opcode) >> 8) as usize;
@@ -249,6 +261,7 @@ pub struct Emulator {
     call_stack: [usize; CHIP8_CALL_STACK_MAX_DEPTH],
     call_stack_depth: usize,
     pub keys_pressed: [bool; CHIP8_NUMBER_KEYS],
+    pub system_clock: u8,
 }
 
 const SCREEN_ARRAY_REPEAT_VALUE: PixelStatus = PixelStatus::Black;
@@ -264,6 +277,7 @@ impl Emulator {
             call_stack: [0; CHIP8_CALL_STACK_MAX_DEPTH],
             call_stack_depth: 0,
             keys_pressed: [false; CHIP8_NUMBER_KEYS],
+            system_clock: 0,
         }
     }
 
@@ -368,7 +382,7 @@ impl Emulator {
             OpCode::OC_7XNN(x, nn) => {
                 // Adds NN to register VX
                 println!("Adding {:#X} to register V{:X}", nn, x);
-                self.generic_registers[*x] += *nn;
+                self.generic_registers[*x] = self.generic_registers[*x].wrapping_add(*nn);
             }
 
             OpCode::OC_8XY0(x, y) => {
@@ -501,6 +515,18 @@ impl Emulator {
                 if !self.keys_pressed[self.generic_registers[*x] as usize] {
                     self.program_counter += 2;
                 }
+            }
+
+            OpCode::OC_FX07(x) => {
+                // Sets VX to the current value of the system clock
+                println!("Setting V{:X} to the current value of system clock", x);
+                self.generic_registers[*x] = self.system_clock;
+            }
+
+            OpCode::OC_FX15(x) => {
+                // Sets the system clock to the current value of VX
+                println!("Setting the system clock to the current value of V{:X}", x);
+                self.system_clock = self.generic_registers[*x];
             }
 
             OpCode::OC_FX1E(x) => {
@@ -956,6 +982,25 @@ mod tests {
         emulator.process_next_instruction();
         assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 12);
     }
+
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test_opcode_FX07_FX15() {
+        let mut emulator = Emulator::new();
+        emulator.load_program(&[0xF0, 0x15, 0xF0, 0x07]);
+
+        emulator.generic_registers[0x00] = 0x16;
+        emulator.process_next_instruction();
+        assert_eq!(emulator.system_clock, 0x16);
+        assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 2);
+
+        emulator.system_clock -= 5;
+        emulator.process_next_instruction();
+        assert_eq!(emulator.generic_registers[0x00], 0x11);
+        assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 4);
+    }
+
 
     #[test]
     #[allow(non_snake_case)]

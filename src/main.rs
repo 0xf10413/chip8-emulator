@@ -69,8 +69,11 @@ fn main() {
             }
         }
 
-        emulator.process_next_instruction();
-        println!();
+        // Several cpu cycles per render cycle
+        for _ in 0..4 {
+            emulator.process_next_instruction();
+            println!();
+        }
 
         canvas.set_draw_color(Color::WHITE);
         for i in 0..CHIP8_SCREEN_WIDTH {
@@ -91,7 +94,7 @@ fn main() {
         // Display new screen
         canvas.present();
 
-        // Slow down a bit
-        ::std::thread::sleep(Duration::new(0, 1_000_000_0u32 / 60));
+        // About 60Hz of refresh time
+        ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
 }
