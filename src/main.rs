@@ -63,16 +63,12 @@ fn main() {
                     keycode: Some(Keycode::Escape),
                     ..
                 } => break 'running,
-                Event::KeyDown {
-                    keycode: Some(Keycode::SPACE),
-                    ..
-                } => {
-                    emulator.process_next_instruction();
-                    println!();
-                }
                 _ => {}
             }
         }
+
+        emulator.process_next_instruction();
+        println!();
 
         canvas.set_draw_color(Color::WHITE);
         for i in 0..CHIP8_SCREEN_WIDTH {
@@ -94,6 +90,6 @@ fn main() {
         canvas.present();
 
         // Slow down a bit
-        ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+        ::std::thread::sleep(Duration::new(0, 1_000_000_0u32 / 60));
     }
 }

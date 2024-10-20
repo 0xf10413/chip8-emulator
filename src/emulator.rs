@@ -444,7 +444,7 @@ impl EmulatorCpuMemory {
                 println!("Drawing sprite with height {} at (V{:x} = {}, V{:x} = {})", n, x, self.generic_registers[*x], y, self.generic_registers[*y]);
                 let pos_x = self.generic_registers[*x] as usize;
                 let pos_y = self.generic_registers[*y] as usize;
-                for (offset_y, byte) in self.memory[self.memory_register ..= self.memory_register+n].iter().enumerate() {
+                for (offset_y, byte) in self.memory[self.memory_register .. self.memory_register+n].iter().enumerate() {
                     for bit_index in (0..8).rev() {
                         let offset_x = 7 - bit_index;
                         let switch_pixel = (byte & (1 << bit_index)) >> bit_index == 1;
@@ -845,7 +845,7 @@ mod tests {
     #[allow(non_snake_case)]
     fn test_opcode_DXYN() {
         let mut emulator: EmulatorCpuMemory = EmulatorCpuMemory::new();
-        emulator.load_program(&[0xD0, 0x11]);
+        emulator.load_program(&[0xD0, 0x12]);
 
         // Cheating a bit for a faster setup
         emulator.generic_registers[0] = 0x05;
