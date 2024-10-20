@@ -572,7 +572,6 @@ impl Emulator {
                 self.register_for_key = *x;
             }
 
-
             OpCode::OC_FX18(x) => {
                 // Sets the sound clock to the current value of VX
                 println!("Setting the sound clock to the current value of V{:X}", x);
@@ -1091,7 +1090,6 @@ mod tests {
             );
         }
         assert_eq!(emulator.generic_registers[0xF], 0x1)
-
     }
 
     #[test]
