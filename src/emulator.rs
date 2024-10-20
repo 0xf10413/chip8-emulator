@@ -415,19 +415,19 @@ impl Emulator {
                     "Adding register V{:X} with the value of V{:X}, while putting carry in VF",
                     x, y
                 );
-                let (result, overflow) =
+                let (result, carry) =
                     self.generic_registers[*x].overflowing_add(self.generic_registers[*y]);
                 self.generic_registers[*x] = result;
-                self.generic_registers[0xF] = if overflow { 1 } else { 0 };
+                self.generic_registers[0xF] = if carry { 1 } else { 0 };
             }
 
             OpCode::OC_8XY5(x, y) => {
                 // Set register VX to the value of VX - VY, write carry in VF
                 println!("Substracting register V{:X} with the value of V{:X}, while putting carry in VF", x, y);
-                let (result, overflow) =
+                let (result, carry) =
                     self.generic_registers[*x].overflowing_sub(self.generic_registers[*y]);
                 self.generic_registers[*x] = result;
-                self.generic_registers[0xF] = if overflow { 1 } else { 0 };
+                self.generic_registers[0xF] = if carry { 0 } else { 1 };
             }
 
             OpCode::OC_8XY6(x, ..) => {
@@ -462,7 +462,7 @@ impl Emulator {
             }
 
             OpCode::OC_9XY0(x, y) => {
-                // Skips next instruction if VX == VY
+                // Skips next instruction if VX != VY
                 println!("Skipping next instruction if V{:X} != V{:X}", x, y);
                 if self.generic_registers[*x] != self.generic_registers[*y] {
                     self.program_counter += 2;
@@ -478,7 +478,7 @@ impl Emulator {
             OpCode::OC_CXNN(x, nn) => {
                 // Set register VX to a random number between 0 and nn
                 println!("Setting V{:x} to a random number less than {}", x, nn);
-                self.generic_registers[*x] = rand::random::<u8>() % nn;
+                self.generic_registers[*x] = rand::random::<u8>() & nn;
             }
 
             OpCode::OC_DXYN(x, y, n) => {
@@ -816,12 +816,12 @@ mod tests {
         emulator.process_next_instruction();
         assert_eq!(emulator.generic_registers[0xA], 0x01);
         assert_eq!(emulator.generic_registers[0xB], 0x02);
-        assert_eq!(emulator.generic_registers[0xF], 0x00);
+        assert_eq!(emulator.generic_registers[0xF], 0x01);
         assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 8);
         emulator.process_next_instruction();
         assert_eq!(emulator.generic_registers[0xA], 0xFF);
         assert_eq!(emulator.generic_registers[0xB], 0x02);
-        assert_eq!(emulator.generic_registers[0xF], 0x01);
+        assert_eq!(emulator.generic_registers[0xF], 0x00);
         assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 10);
     }
 
