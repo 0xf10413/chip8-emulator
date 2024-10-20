@@ -27,7 +27,7 @@ fn main() {
 
     let mut event_pump = sdl_context.event_pump().unwrap();
 
-    let mut emulator = emulator::EmulatorCpuMemory::new();
+    let mut emulator = emulator::Emulator::new();
     emulator.load_program(&[
         // Set V0 to sprite value
         0x60, 0b10101010,
@@ -63,6 +63,7 @@ fn main() {
                     keycode: Some(Keycode::Escape),
                     ..
                 } => break 'running,
+                Event::KeyDown { keycode: Some(Keycode::NUM_8), ..} => panic!("Not implemented!"),
                 _ => {}
             }
         }

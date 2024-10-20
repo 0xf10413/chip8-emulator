@@ -4,6 +4,7 @@ const CHIP8_NUMBER_REGISTERS: usize = 16;
 pub const CHIP8_SCREEN_WIDTH: usize = 64;
 pub const CHIP8_SCREEN_HEIGHT: usize = 32;
 const CHIP8_CALL_STACK_MAX_DEPTH: usize = 16;
+const CHIP8_NUMBER_KEYS: usize = 16;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
@@ -32,8 +33,8 @@ enum OpCode {
     // BNNN
     // CXNN
     OC_DXYN(usize, usize, usize),
-    // EX9E
-    // EXA1
+    OC_EX9E(usize),
+    OC_EXA1(usize),
     // FX07
     // FX0A
     // FX15
@@ -193,6 +194,18 @@ fn parse_opcode(raw_opcode: u16) -> Option<OpCode> {
         return Some(OpCode::OC_DXYN(x, y, n));
     }
 
+    // EX9E
+    if raw_opcode & 0xF0FF == 0xE09E {
+        let x: usize = ((0x0F00 & raw_opcode) >> 8) as usize;
+        return Some(OpCode::OC_EX9E(x));
+    }
+
+    // EXA1
+    if raw_opcode & 0xF0FF == 0xE0A1 {
+        let x: usize = ((0x0F00 & raw_opcode) >> 8) as usize;
+        return Some(OpCode::OC_EXA1(x));
+    }
+
     // FX1E
     if raw_opcode & 0xF0FF == 0xF01E {
         let x: usize = ((0x0F00 & raw_opcode) >> 8) as usize;
@@ -220,7 +233,7 @@ pub enum PixelStatus {
     White,
 }
 
-pub struct EmulatorCpuMemory {
+pub struct Emulator {
     memory: [u8; CHIP8_MEMORY_SIZE],
     program_counter: usize,                          // pc
     generic_registers: [u8; CHIP8_NUMBER_REGISTERS], // V0..VF
@@ -228,10 +241,11 @@ pub struct EmulatorCpuMemory {
     pub screen: [PixelStatus; (CHIP8_SCREEN_WIDTH * CHIP8_SCREEN_HEIGHT) as usize],
     call_stack: [usize; CHIP8_CALL_STACK_MAX_DEPTH],
     call_stack_depth: usize,
+    keys_pressed: [bool; CHIP8_NUMBER_KEYS],
 }
 
 const SCREEN_ARRAY_REPEAT_VALUE: PixelStatus = PixelStatus::Black;
-impl EmulatorCpuMemory {
+impl Emulator {
     pub fn new() -> Self {
         Self {
             memory: [0; CHIP8_MEMORY_SIZE],
@@ -242,6 +256,7 @@ impl EmulatorCpuMemory {
                 (CHIP8_SCREEN_WIDTH * CHIP8_SCREEN_HEIGHT) as usize],
             call_stack: [0; CHIP8_CALL_STACK_MAX_DEPTH],
             call_stack_depth: 0,
+            keys_pressed: [false; CHIP8_NUMBER_KEYS],
         }
     }
 
@@ -459,6 +474,22 @@ impl EmulatorCpuMemory {
                 }
             }
 
+            OpCode::OC_EX9E(x) => {
+                // Skips next instruction if key indicated by VX is pressed
+                println!("Skipping next instruction if V{:X}'s key is pressed", x);
+                if self.keys_pressed[self.generic_registers[*x] as usize] {
+                    self.program_counter += 2;
+                }
+            }
+
+            OpCode::OC_EXA1(x) => {
+                // Skips next instruction if key indicated by VX is *not* pressed
+                println!("Skipping next instruction if V{:X}'s key is pressed", x);
+                if !self.keys_pressed[self.generic_registers[*x] as usize] {
+                    self.program_counter += 2;
+                }
+            }
+
             OpCode::OC_FX1E(x) => {
                 // Add VX to I, taking into account overflow. Writes overflow in VF.
                 println!("Adding V{:X} to I, writing overflow in VF in memory at I", x);
@@ -498,7 +529,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Unidentified opcode 0x800F!")]
     fn test_unknown_opcode() {
-        let mut emulator = EmulatorCpuMemory::new();
+        let mut emulator = Emulator::new();
         emulator.load_program(&[0x80, 0x0F]);
         emulator.process_next_instruction();
     }
@@ -507,7 +538,7 @@ mod tests {
     #[allow(non_snake_case)]
     #[should_panic(expected = "OpCode 0NNN not implemented!")]
     fn test_opcode_0NNN() {
-        let mut emulator = EmulatorCpuMemory::new();
+        let mut emulator = Emulator::new();
         emulator.load_program(&[0x00, 0x00]);
         emulator.process_next_instruction();
     }
@@ -515,7 +546,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_opcode_00E0() {
-        let mut emulator = EmulatorCpuMemory::new();
+        let mut emulator = Emulator::new();
         emulator.load_program(&[0x00, 0xE0]);
         emulator.screen[0x10] = PixelStatus::White;
         emulator.process_next_instruction();
@@ -525,7 +556,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_opcode_1NNN() {
-        let mut emulator = EmulatorCpuMemory::new();
+        let mut emulator = Emulator::new();
         emulator.load_program(&[0x12, 0xFF]);
         emulator.process_next_instruction();
         assert_eq!(emulator.program_counter, 0x2FF);
@@ -534,7 +565,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_opcode_2NNN_00EE() {
-        let mut emulator = EmulatorCpuMemory::new();
+        let mut emulator = Emulator::new();
         emulator.load_program(&[0x22, 0x04, 0x00, 0x00, 0x00, 0xEE]);
         emulator.process_next_instruction();
         assert_eq!(emulator.program_counter, 0x204);
@@ -548,7 +579,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_opcode_3XNN() {
-        let mut emulator = EmulatorCpuMemory::new();
+        let mut emulator = Emulator::new();
         emulator.load_program(&[0x6A, 0x01, 0x3A, 0x01, 0x6A, 0x10, 0x3A, 0x02]);
         emulator.process_next_instruction();
         assert_eq!(emulator.generic_registers[0xA], 0x01);
@@ -563,7 +594,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_opcode_4XNN() {
-        let mut emulator = EmulatorCpuMemory::new();
+        let mut emulator = Emulator::new();
         emulator.load_program(&[0x6A, 0x01, 0x4A, 0x00, 0x6A, 0x10, 0x4A, 0x01]);
         emulator.process_next_instruction();
         assert_eq!(emulator.generic_registers[0xA], 0x01);
@@ -578,7 +609,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_opcode_5XY0() {
-        let mut emulator = EmulatorCpuMemory::new();
+        let mut emulator = Emulator::new();
         emulator.load_program(&[
             0x6A, 0x01, 0x6B, 0x01, 0x5A, 0xB0, 0x6A, 0x10, 0x6A, 0x02, 0x5A, 0xB0,
         ]);
@@ -604,7 +635,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_opcode_6XNN() {
-        let mut emulator = EmulatorCpuMemory::new();
+        let mut emulator = Emulator::new();
         emulator.load_program(&[0x6A, 0x15]);
         emulator.process_next_instruction();
         assert_eq!(emulator.generic_registers[0xA], 0x15);
@@ -614,7 +645,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_opcode_7XNN() {
-        let mut emulator = EmulatorCpuMemory::new();
+        let mut emulator = Emulator::new();
         emulator.load_program(&[0x7B, 0x03, 0x7B, 0x05]);
         emulator.process_next_instruction();
         emulator.process_next_instruction();
@@ -625,7 +656,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_opcode_8XY0() {
-        let mut emulator = EmulatorCpuMemory::new();
+        let mut emulator = Emulator::new();
         emulator.load_program(&[0x6A, 0x03, 0x6B, 0x05, 0x8A, 0xB0]);
         emulator.process_next_instruction();
         emulator.process_next_instruction();
@@ -641,7 +672,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_opcode_8XY1() {
-        let mut emulator = EmulatorCpuMemory::new();
+        let mut emulator = Emulator::new();
         emulator.load_program(&[0x6A, 0x03, 0x6B, 0x30, 0x8A, 0xB1]);
         emulator.process_next_instruction();
         emulator.process_next_instruction();
@@ -657,7 +688,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_opcode_8XY2() {
-        let mut emulator = EmulatorCpuMemory::new();
+        let mut emulator = Emulator::new();
         emulator.load_program(&[0x6A, 0b0011, 0x6B, 0b0101, 0x8A, 0xB2]);
         emulator.process_next_instruction();
         emulator.process_next_instruction();
@@ -673,7 +704,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_opcode_8XY3() {
-        let mut emulator = EmulatorCpuMemory::new();
+        let mut emulator = Emulator::new();
         emulator.load_program(&[0x6A, 0b0011, 0x6B, 0b0101, 0x8A, 0xB3]);
         emulator.process_next_instruction();
         emulator.process_next_instruction();
@@ -689,7 +720,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_opcode_8XY4() {
-        let mut emulator = EmulatorCpuMemory::new();
+        let mut emulator = Emulator::new();
         emulator.load_program(&[0x6A, 0xFE, 0x6B, 0x01, 0x6F, 0x10, 0x8A, 0xB4, 0x8A, 0xB4]);
         emulator.process_next_instruction();
         emulator.process_next_instruction();
@@ -713,7 +744,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_opcode_8XY5() {
-        let mut emulator = EmulatorCpuMemory::new();
+        let mut emulator = Emulator::new();
         emulator.load_program(&[0x6A, 0x03, 0x6B, 0x02, 0x6F, 0x10, 0x8A, 0xB5, 0x8A, 0xB5]);
         emulator.process_next_instruction();
         emulator.process_next_instruction();
@@ -737,7 +768,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_opcode_8XY6() {
-        let mut emulator = EmulatorCpuMemory::new();
+        let mut emulator = Emulator::new();
         emulator.load_program(&[0x6A, 0b0110, 0x6F, 0x10, 0x8A, 0xB6, 0x8A, 0xB6]);
         emulator.process_next_instruction();
         emulator.process_next_instruction();
@@ -757,7 +788,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_opcode_8XY7() {
-        let mut emulator = EmulatorCpuMemory::new();
+        let mut emulator = Emulator::new();
         emulator.load_program(&[
             0x6A, 0x04, 0x6B, 0x03, 0x6F, 0x10, 0x8A, 0xB7, 0x6A, 0x01, 0x8A, 0xB7,
         ]);
@@ -788,7 +819,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_opcode_8XYE() {
-        let mut emulator = EmulatorCpuMemory::new();
+        let mut emulator = Emulator::new();
         emulator.load_program(&[0x6A, 0b10100000, 0x6F, 0x10, 0x8A, 0xBE, 0x8A, 0xBE]);
         emulator.process_next_instruction();
         emulator.process_next_instruction();
@@ -808,7 +839,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_opcode_9XY0() {
-        let mut emulator = EmulatorCpuMemory::new();
+        let mut emulator = Emulator::new();
         emulator.load_program(&[
             0x6A, 0x02, 0x6B, 0x01, 0x9A, 0xB0, 0x6A, 0x10, 0x6A, 0x01, 0x9A, 0xB0,
         ]);
@@ -834,7 +865,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_opcode_ANNN() {
-        let mut emulator = EmulatorCpuMemory::new();
+        let mut emulator = Emulator::new();
         emulator.load_program(&[0xAF, 0xEB]);
         emulator.process_next_instruction();
         assert_eq!(emulator.memory_register, 0x0FEB);
@@ -844,7 +875,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_opcode_DXYN() {
-        let mut emulator: EmulatorCpuMemory = EmulatorCpuMemory::new();
+        let mut emulator: Emulator = Emulator::new();
         emulator.load_program(&[0xD0, 0x12]);
 
         // Cheating a bit for a faster setup
@@ -881,8 +912,30 @@ mod tests {
 
     #[test]
     #[allow(non_snake_case)]
+    fn test_opcode_EX9E_EXA1() {
+        let mut emulator: Emulator = Emulator::new();
+        emulator.load_program(&[0xE0, 0x9E, 0xE0, 0x9E, 0x00, 0x00, 0xE0, 0xA1, 0xE0, 0xA1]);
+
+        emulator.generic_registers[0x0] = 0x01;
+        emulator.process_next_instruction();
+        assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 2);
+
+        emulator.keys_pressed[0x01] = true;
+        emulator.process_next_instruction();
+        assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 6);
+
+        emulator.process_next_instruction();
+        assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 8);
+
+        emulator.keys_pressed[0x01] = false;
+        emulator.process_next_instruction();
+        assert_eq!(emulator.program_counter, CHIP8_FIRST_BYTE_ADDRESS + 12);
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
     fn test_opcode_FX1E() {
-        let mut emulator = EmulatorCpuMemory::new();
+        let mut emulator = Emulator::new();
         emulator.load_program(&[0x60, 0xFF, 0x6F, 0x10, 0xAF, 0xFF, 0xF0, 0x1E, 0xF0, 0x1E]);
 
         emulator.process_next_instruction();
@@ -909,7 +962,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_opcode_FX55() {
-        let mut emulator = EmulatorCpuMemory::new();
+        let mut emulator = Emulator::new();
         emulator.load_program(&[0x60, 0b10101010, 0x61, 0b00110011, 0xA1, 0x55, 0xF1, 0x55]);
 
         emulator.process_next_instruction();
@@ -929,7 +982,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_opcode_FX65() {
-        let mut emulator = EmulatorCpuMemory::new();
+        let mut emulator = Emulator::new();
         emulator.load_program(&[0xF1, 0x65]);
 
         // Cheating a bit with the setup to go faster
